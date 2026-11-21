@@ -51,6 +51,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .filemenu .menu{position:absolute;right:0;top:calc(100% + 6px);background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(27,36,48,.14);padding:6px;min-width:200px;z-index:40}
 .filemenu .menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:7px;cursor:pointer}
 .filemenu .menu button:hover{background:var(--line-soft)}
+.filemenu .menu button:disabled{color:var(--muted);cursor:default;background:none}
 .filemenu .menu p{margin:6px 10px 4px;font-size:12px;color:var(--muted);max-width:220px}
 
 /* ---------- Knapper og felter ---------- */
@@ -90,6 +91,9 @@ main{max-width:1320px;margin:0 auto;padding:28px 28px 60px}
 .att{display:grid;grid-template-columns:1fr auto auto;gap:16px;align-items:center;padding:10px 18px;border-top:1px solid var(--line-soft)}
 .att .t{font-family:var(--serif);font-weight:600;font-size:16px}
 .att .m{font-size:13px;color:var(--muted)}
+.resume{background:var(--stamp-soft);border:1px solid #C9D5EE;border-left:4px solid var(--stamp);border-radius:12px;padding:14px 18px;margin-bottom:20px;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.resume b{font:700 17px/1.3 var(--serif)}
+.resume .meta{color:#3D4C66}
 .calm{color:var(--muted);font-size:14px;margin:-6px 0 22px;display:flex;align-items:center;gap:8px}
 
 /* Søgning og filtre */
@@ -239,6 +243,7 @@ tr.year span{font:400 12px var(--sans);color:var(--muted);margin-left:8px}
         <summary class="btn">Fil ▾</summary>
         <div class="menu">
           <button data-action="open">Åbn Excel-fil…</button>
+          <button data-action="open-recent" id="recentBtn">Åbn senest brugte fil</button>
           <button data-action="saveas">Gem som ny fil…</button>
           <button data-action="new">Start en tom fil</button>
           <p id="fileNote"></p>
@@ -253,6 +258,7 @@ tr.year span{font:400 12px var(--sans);color:var(--muted);margin-left:8px}
     <div><h2 id="title"></h2><p id="subtitle"></p></div>
     <button id="newBtn" class="btn primary" data-action="new-item"></button>
   </div>
+  <div id="resume"></div>
   <div id="figures"></div>
   <div id="attention"></div>
   <div id="controls" class="toolbar">
@@ -339,7 +345,7 @@ const dage = n => `${n} arbejdsdag${Math.abs(n) === 1 ? '' : 'e'}`;
    ===================================================================== */
 let S = emptyState();
 let view = 'akt';
-let fileHandle = null, fileName = '', fileModified = 0, dirty = false, oldFormat = false, handlePending = false;
+let fileHandle = null, fileName = '', fileModified = 0, dirty = false, oldFormat = false, handlePending = false, lastName = '', backupAt = 0;
 
 function emptyState() { return { akt: [], klager: [], events: [], trash: [] }; }
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -415,7 +421,7 @@ function render() {
   $('title').textContent = t; $('subtitle').textContent = st;
   $('newBtn').textContent = nb; $('newBtn').hidden = !nb;
   $('controls').hidden = !['akt', 'klage'].includes(view);
-  renderFile(); renderFigures(); renderAttention(); renderFilters(); renderDatalists();
+  renderFile(); renderResume(); renderFigures(); renderAttention(); renderFilters(); renderDatalists();
   if (view === 'akt') renderAkt();
   else if (view === 'klage') renderKlage();
   else if (view === 'stat') renderStat();
@@ -426,12 +432,25 @@ function render() {
 function renderFile() {
   let state, cls;
   if (!fileName) { cls = dirty ? 'dirty' : 'none'; state = dirty ? 'Ikke gemt i en fil' : 'Ingen fil åben'; }
+  else if (handlePending) { cls = dirty ? 'dirty' : 'none'; state = dirty ? 'Ikke gemt, filen er ikke hentet' : 'Filen er ikke hentet endnu'; }
   else if (dirty) { cls = 'dirty'; state = 'Ikke gemt'; }
   else { cls = 'saved'; state = oldFormat ? 'Gammelt format, gem for at konvertere' : 'Alt er gemt'; }
   if (oldFormat && dirty) state = 'Ikke gemt, gammelt format';
   $('fileChip').innerHTML = `<span class="name" title="${esc(fileName)}">${esc(fileName || 'Ingen Excel-fil')}</span><span class="state ${cls}"><span class="dot"></span>${esc(state)}</span>`
-    + (handlePending ? '<button class="linkbtn" data-action="reconnect">Giv adgang til filen igen</button>' : '');
+
   $('fileNote').textContent = canFS ? '“Gem” skriver direkte i den åbne Excel-fil.' : 'Din browser kan ikke skrive direkte i filen. “Gem” henter en ny kopi til Overførsler.';
+}
+
+function renderResume() {
+  const rb = $('recentBtn');
+  rb.disabled = !canFS || !lastName;
+  rb.textContent = lastName ? 'Åbn senest brugte fil (' + lastName + ')' : 'Åbn senest brugte fil';
+  rb.title = !canFS ? 'Kræver Chrome eller Edge' : !lastName ? 'Du har ikke åbnet en fil i appen endnu' : '';
+  if (!handlePending) { $('resume').innerHTML = ''; return; }
+  const txt = dirty
+    ? 'Du har ændringer fra sidst, som ikke er gemt. De bliver bevaret, og du kan gemme dem i filen bagefter.'
+    : (S.akt.length || S.klager.length) ? 'Det, du ser nu, er browserens kopi. Hent filen for at få den nyeste version, fx hvis den er ændret på en anden computer.' : 'Det er den fil, du brugte sidst. Klik for at hente den.';
+  $('resume').innerHTML = `<div class="resume"><div><b>Fortsæt med ${esc(lastName)}</b><div class="meta">${txt}</div></div><button class="btn primary" data-action="reconnect">${dirty ? 'Forbind til filen' : 'Hent filen'}</button></div>`;
 }
 
 function renderFigures() {
@@ -1094,8 +1113,8 @@ const XLSX_TYPES = [{ description: 'Excel-fil', accept: { 'application/vnd.openx
 const canFS = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
 const IDB = 'aktindsigt_v4_handles';
 function idb() { return new Promise((res, rej) => { const r = indexedDB.open(IDB, 1); r.onupgradeneeded = () => r.result.createObjectStore('h'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
-async function rememberHandle(h) { try { const db = await idb(); db.transaction('h', 'readwrite').objectStore('h').put(h, 'last'); } catch { } }
-async function forgetHandle() { try { const db = await idb(); db.transaction('h', 'readwrite').objectStore('h').delete('last'); } catch { } }
+async function rememberHandle(h) { lastName = h?.name || ''; try { const db = await idb(); db.transaction('h', 'readwrite').objectStore('h').put(h, 'last'); } catch { } }
+async function forgetHandle() { lastName = ''; try { const db = await idb(); db.transaction('h', 'readwrite').objectStore('h').delete('last'); } catch { } }
 async function recallHandle() { try { const db = await idb(); return await new Promise(res => { const r = db.transaction('h').objectStore('h').get('last'); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); }); } catch { return null; } }
 
 const confirmDiscard = () => !dirty || confirm('Du har ændringer, der ikke er gemt i Excel-filen. Vil du kassere dem?');
@@ -1132,6 +1151,17 @@ function lockedMsg(e) {
 }
 
 async function saveFile() {
+  if (!fileHandle && handlePending) {
+    const h = await recallHandle();
+    if (h) {
+      try {
+        if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') { toast('Browseren fik ikke lov at skrive i filen.'); return; }
+        const f = await h.getFile();
+        if (backupAt && f.lastModified > backupAt + 1000 && !confirm(`“${h.name}” er blevet ændret, efter at appen sidst gemte sin kopi, fx på en anden computer.\n\nVil du overskrive filen med det, du ser i appen nu?\n\nVælg Annuller, og tryk “Hent filen” for at hente den nyeste version i stedet.`)) return;
+        fileHandle = h; fileModified = f.lastModified; handlePending = false;
+      } catch (e) { showError('Filen kunne ikke åbnes', e); return; }
+    }
+  }
   if (!fileHandle) return saveAs();
   try {
     let p = await fileHandle.queryPermission({ mode: 'readwrite' });
@@ -1170,15 +1200,25 @@ function newFile() {
   S = emptyState(); fileHandle = null; fileName = ''; dirty = false; oldFormat = false; handlePending = false; forgetHandle(); saveLocal(); render();
 }
 
+async function openRecent() {
+  const h = await recallHandle();
+  if (!h) { toast('Appen kan ikke finde den senest brugte fil. Vælg “Åbn Excel-fil…”.'); return; }
+  if (!confirmDiscard()) return;
+  try {
+    if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') { toast('Browseren fik ikke lov at åbne filen.'); return; }
+    await loadFile(await h.getFile(), h);
+  } catch (e) { showError('Filen kunne ikke åbnes', { message: e?.name === 'NotFoundError' ? `“${h.name}” findes ikke længere det sted, den lå. Vælg “Åbn Excel-fil…” for at finde den.` : (e?.message || String(e)) }); }
+}
+
 async function reconnect() {
   const h = await recallHandle(); if (!h) { handlePending = false; render(); return; }
   try {
+    if (dirty && h.name !== fileName && !confirmDiscard()) return;
     const p = await h.requestPermission({ mode: 'readwrite' });
-    if (p !== 'granted') return;
-    fileHandle = h; handlePending = false;
+    if (p !== 'granted') { toast('Browseren fik ikke lov at åbne filen.'); return; }
     const f = await h.getFile();
-    if (!dirty && f.lastModified !== fileModified) await loadFile(f, h);
-    else { fileModified = fileModified || f.lastModified; render(); toast('Forbindelsen til ' + h.name + ' er genoprettet'); }
+    if (!dirty || h.name !== fileName) { dirty = false; await loadFile(f, h); }
+    else { fileHandle = h; handlePending = false; fileModified = f.lastModified; render(); toast('Forbundet til ' + h.name + '. Husk at gemme dine ændringer.'); }
   } catch (e) { showError('Filen kunne ikke åbnes', e); }
 }
 
@@ -1209,12 +1249,14 @@ async function start() {
   let restored = false;
   try {
     const b = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
-    if (b && b.S) { S = { ...emptyState(), ...b.S }; fileName = b.fileName || ''; dirty = !!b.dirty; oldFormat = !!b.oldFormat; restored = true; }
+    if (b && b.S) { S = { ...emptyState(), ...b.S }; fileName = b.fileName || ''; dirty = !!b.dirty; oldFormat = !!b.oldFormat; restored = true; backupAt = Date.parse(b.savedAt || '') || 0; }
   } catch { }
   if (!restored && migrateOldLocal()) toast('Data fra den gamle version er hentet fra browseren. Gem dem i en Excel-fil.');
-  if (canFS && fileName) {
+  if (canFS) {
     const h = await recallHandle();
-    if (h && h.name === fileName) {
+    lastName = h?.name || '';
+    if (h && (!fileName || h.name === fileName)) {
+      if (!fileName) fileName = h.name;
       try {
         const p = await h.queryPermission({ mode: 'readwrite' });
         if (p === 'granted') {
@@ -1225,7 +1267,7 @@ async function start() {
     }
   }
   render();
-  if (restored && dirty) toast('Du har ændringer fra sidst, som ikke er gemt i Excel-filen.');
+  if (restored && dirty && !handlePending) toast('Du har ændringer fra sidst, som ikke er gemt i Excel-filen.');
 }
 
 /* Klik og taster */
@@ -1242,6 +1284,7 @@ document.addEventListener('click', e => {
     case 'saveas': saveAs(); break;
     case 'new': newFile(); break;
     case 'reconnect': reconnect(); break;
+    case 'open-recent': openRecent(); break;
     case 'close': closeModal(); break;
     case 'new-item': view === 'klage' ? klageForm() : aktForm(); break;
     case 'edit-akt': aktForm(aktById(id)); break;
