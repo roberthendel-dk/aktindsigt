@@ -87,6 +87,13 @@ main{max-width:1320px;margin:0 auto;padding:28px 28px 60px}
 .fig.warn .v{color:var(--amber)}
 
 /* Kræver handling */
+.pendingbox{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--stamp);border-radius:12px;margin:-8px 0 24px;overflow:hidden}
+.pendingbox summary{list-style:none;cursor:pointer;padding:14px 18px 10px;display:flex;align-items:center;gap:10px}
+.pendingbox summary::-webkit-details-marker{display:none}
+.pendingbox summary h3{font:700 17px/1.2 var(--serif);margin:0}
+.pendingbox summary .n{font-size:12px;font-weight:700;background:var(--stamp-soft);color:var(--stamp-ink);border-radius:999px;padding:1px 8px}
+.pendingbox summary .chev{margin-left:auto;color:var(--muted);font-size:13px}
+.pendingbox[open] summary .chev::after{content:"Skjul"} .pendingbox:not([open]) summary .chev::after{content:"Vis"}
 .attention{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--red);border-radius:12px;margin-bottom:24px;overflow:hidden}
 .attention h3{font:700 17px/1.2 var(--serif);margin:0;padding:14px 18px 10px}
 .att{display:grid;grid-template-columns:1fr auto auto;gap:16px;align-items:center;padding:10px 18px;border-top:1px solid var(--line-soft)}
@@ -266,6 +273,7 @@ tr.year span{font:400 12px var(--sans);color:var(--muted);margin-left:8px}
   <div id="resume"></div>
   <div id="figures"></div>
   <div id="attention"></div>
+  <div id="pending"></div>
   <div id="controls" class="toolbar">
     <input id="search" type="search" placeholder="Søg efter titel, myndighed, journalist eller sagsnummer" aria-label="Søg">
     <select id="fStatus" aria-label="Filtrer på status"></select>
@@ -430,7 +438,7 @@ function render() {
   $('title').textContent = t; $('subtitle').textContent = st;
   $('newBtn').textContent = nb; $('newBtn').hidden = !nb;
   $('controls').hidden = !['akt', 'klage'].includes(view);
-  renderFile(); renderResume(); renderFigures(); renderAttention(); renderFilters(); renderDatalists();
+  renderFile(); renderResume(); renderFigures(); renderAttention(); renderPending(); renderFilters(); renderDatalists();
   if (view === 'akt') renderAkt();
   else if (view === 'klage') renderKlage();
   else if (view === 'stat') renderStat();
@@ -482,6 +490,21 @@ function renderFigures() {
     data = [[vers.length, 'verserende'], [over, 'over forventet afgørelse', over ? 'alert' : ''], [kdone.length, 'afgjort'], [win + ' %', 'medhold eller hjemvisning'], [S.klager.filter(k => k.resultat === 'Hjemvist').length, 'hjemvist']];
   }
   $('figures').innerHTML = data.length ? `<div class="figures">${data.map(([v, l, c]) => `<div class="fig ${c || ''}"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}</div>` : '';
+}
+
+let pendingOpen = true;
+function renderPending() {
+  const list = view === 'akt' ? S.klager.filter(k => k.status !== 'Afgjort').sort((a, b) => (a.dato || '').localeCompare(b.dato || '')) : [];
+  if (!list.length) { $('pending').innerHTML = ''; return; }
+  $('pending').innerHTML = `<details class="pendingbox" id="pendingBox"${pendingOpen ? ' open' : ''}><summary><h3>Klager under behandling</h3><span class="n">${list.length}</span><span class="chev"></span></summary>
+    ${list.map(k => {
+      const a = aktById(k.aktId), ki = klageInfo(k);
+      const m = [k.instans, k.sagsnr ? 'klagesag ' + k.sagsnr : '', k.dato ? 'klaget ' + fmt(k.dato) : '', k.status !== 'Under behandling' ? k.status.toLowerCase() : ''].filter(Boolean).join(', ');
+      return `<div class="att"><div><div class="t">${esc(a ? a.emne : 'Klage ' + (k.sagsnr || 'uden titel'))}</div><div class="m">${esc(m)}</div></div>
+        <div class="c-${ki.cls}"><span class="flabel">${esc(ki.txt)}</span></div>
+        <div class="formbtns"><button class="btn sm" data-action="new-event" data-id="${k.id}">Tilføj hændelse</button><button class="btn sm" data-action="open-case" data-id="${k.id}">Åbn klage</button></div></div>`;
+    }).join('')}</details>`;
+  $('pendingBox').addEventListener('toggle', e => { pendingOpen = e.target.open; });
 }
 
 function renderAttention() {
