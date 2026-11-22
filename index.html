@@ -302,6 +302,8 @@ const KL_STATUS = ['Under behandling', 'Hjemvist til genbehandling', 'Afgjort'];
 const KL_RES = ['Afventer', 'Medhold (Omgjort)', 'Delvis medhold', 'Hjemvist', 'Ikke medhold (Stadfæstet)', 'Afvist', 'Henvist til anden klageinstans'];
 const KL_WIN = ['Medhold (Omgjort)', 'Delvis medhold', 'Hjemvist'];
 const EV_TYPES = ['Modtaget kvittering', 'Modtaget anmodning om præcisering', 'Modtaget anmodning om afgrænsning', 'Sendt rykker', 'Modtaget fristudsættelse', 'Sendt indsigelse', 'Klage sendt', 'Hjemvist', 'Genbehandling', 'Modtaget svar', 'Notat'];
+const KL_EV_TYPES = ['Modtaget kvittering', 'Klageinstansen har udskudt afgørelsen', 'Sendt rykker', 'Modtaget myndighedens udtalelse', 'Sendt bemærkninger', 'Hjemvist', 'Genbehandling', 'Modtaget afgørelse', 'Notat'];
+const FRIST_TYPES = ['Modtaget fristudsættelse', 'Klageinstansen har udskudt afgørelsen'];
 
 /* =====================================================================
    Datoer og arbejdsdage (alt regnes i lokal tid som 'åååå-mm-dd')
@@ -736,20 +738,20 @@ function eventForm(sagId, evId = null) {
   sagId = sagId || e.sagId;
   const s = sagInfo(sagId); if (!s) return;
   openModal((evId ? 'Rediger hændelse · ' : 'Ny hændelse · ') + s.titel, `<form id="f" class="grid2" novalidate>
-    <div><label for="etype">Hændelse</label><select id="etype" name="type">${opts(EV_TYPES, e.type || 'Sendt rykker')}</select></div>
+    <div><label for="etype">Hændelse</label><select id="etype" name="type">${opts(s.type === 'Klage' ? KL_EV_TYPES : EV_TYPES, e.type || 'Sendt rykker')}</select></div>
     <div><label for="edato">Dato *</label><input id="edato" type="date" name="dato" required value="${e.dato || today()}"></div>
     <div id="nyWrap"><label for="eny">Ny frist</label><input id="eny" type="date" name="nyFrist" value="${e.nyFrist || ''}"><div class="hint">${s.type === 'Aktindsigt' ? 'Bliver sagens gældende svarfrist.' : 'Bliver klagens forventede afgørelsesdato.'}</div></div>
     <div class="full"><label for="enote">Notat</label><textarea id="enote" name="note">${esc(e.note)}</textarea></div>
     <div class="full err" id="ferr" role="alert"></div>
     <div class="full formbtns"><button class="btn primary">Gem hændelse</button><button type="button" class="btn" data-action="close">Annuller</button>${evId ? `<button type="button" class="btn danger right" data-action="del-event" data-id="${evId}">Slet hændelse</button>` : ''}</div></form>`);
-  const f = $('f'); const tg = () => { $('nyWrap').hidden = !(f.type.value === 'Modtaget fristudsættelse' || f.nyFrist.value); };
+  const f = $('f'); const tg = () => { $('nyWrap').hidden = !(FRIST_TYPES.includes(f.type.value) || f.nyFrist.value); };
   f.type.addEventListener('change', tg); tg();
   f.onsubmit = ev => {
     ev.preventDefault();
     const o = formData(f);
     if (!isYmd(o.dato)) { $('ferr').textContent = 'Dato skal udfyldes.'; return; }
     if (evId) Object.assign(e, o); else S.events.push({ id: uid(), sagId, sagType: s.type === 'Aktindsigt' ? 'akt' : 'klage', ...o });
-    if (o.type === 'Modtaget fristudsættelse' && o.nyFrist) s.obj.frist = o.nyFrist;
+    if (FRIST_TYPES.includes(o.type) && o.nyFrist) s.obj.frist = o.nyFrist;
     closeModal(); changed(); if (!drawerId) openDrawer(sagId);
   };
 }
