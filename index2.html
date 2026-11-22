@@ -306,7 +306,13 @@ const DROPBOX_APP_KEY = 'zjg5dswmxtqrnrx';
 const AKT_STATUS = ['Under behandling', 'Afgjort'];
 const AKT_AFG = ['Afventer', 'Fuld aktindsigt', 'Delvis aktindsigt', 'Afslag', 'Henlagt'];
 const KL_INSTANS = ['Ankestyrelsen', 'Folketingets Ombudsmand', 'Datatilsynet', 'Nævnenes Hus', 'Anden'];
-const KL_STATUS = ['Under behandling', 'Hjemvist til genbehandling', 'Afgjort'];
+const KL_STATUS = ['Under behandling', 'Afgjort'];
+/* En klage er afgjort, så snart klageinstansen har truffet en afgørelse, også ved hjemvisning. */
+function normKlage(k) {
+  if (k.status === 'Hjemvist til genbehandling') { k.status = 'Afgjort'; if (!k.resultat || k.resultat === 'Afventer') k.resultat = 'Hjemvist'; }
+  if (k.resultat && k.resultat !== 'Afventer') k.status = 'Afgjort';
+  return k;
+}
 const KL_RES = ['Afventer', 'Medhold (Omgjort)', 'Delvis medhold', 'Hjemvist', 'Ikke medhold (Stadfæstet)', 'Afvist', 'Henvist til anden klageinstans'];
 const KL_WIN = ['Medhold (Omgjort)', 'Delvis medhold', 'Hjemvist'];
 const EV_TYPES = ['Modtaget kvittering', 'Modtaget anmodning om præcisering', 'Modtaget anmodning om afgrænsning', 'Sendt rykker', 'Modtaget fristudsættelse', 'Sendt indsigelse', 'Klage sendt', 'Hjemvist', 'Genbehandling', 'Modtaget svar', 'Notat'];
@@ -405,13 +411,8 @@ function aktFristInfo(a) {
   return { txt: `${dage(n)} tilbage`, cls: 'blue' };
 }
 function klageInfo(k) {
-  if (k.status === 'Afgjort') return { txt: 'Afgjort', cls: 'grey' };
+  if (k.status === 'Afgjort') return { txt: k.resultat === 'Hjemvist' ? 'Afgjort, hjemvist til genbehandling' : 'Afgjort', cls: 'grey' };
   const t = today();
-  if (k.status === 'Hjemvist til genbehandling' && isYmd(k.genbehandlingFrist)) {
-    const n = workdiff(t, k.genbehandlingFrist);
-    if (n < 0) return { txt: `Genbehandlingsfrist overskredet med ${dage(-n)}`, cls: 'red', over: true };
-    return { txt: `Genbehandling: ${dage(n)} tilbage`, cls: n <= 2 ? 'amber' : 'blue', soon: n <= 2 };
-  }
   if (isYmd(k.frist)) {
     const n = workdiff(t, k.frist);
     if (n < 0) return { txt: `Forventet afgørelse overskredet med ${dage(-n)}`, cls: 'red', over: true };
@@ -529,7 +530,7 @@ function renderAttention() {
 function renderFilters() {
   const fs = $('fStatus'), fm = $('fMyn'), cs = fs.value, cm = fm.value;
   const o = view === 'klage'
-    ? ['Under behandling', 'Hjemvist til genbehandling', 'Afgjort', 'Over forventet afgørelse', 'Ikke koblet']
+    ? ['Under behandling', 'Afgjort', 'Over forventet afgørelse', 'Ikke koblet']
     : ['Under behandling', 'Afgjort', 'Over fristen', 'Frist inden for 2 dage'];
   fs.innerHTML = '<option value="">Alle statusser</option>' + o.map(x => `<option${x === cs ? ' selected' : ''}>${esc(x)}</option>`).join('');
   const list = view === 'klage' ? [...new Set(S.klager.map(k => k.instans).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'da')) : myndigheder();
@@ -611,7 +612,7 @@ function renderKlage() {
           ${a ? '' : '<span class="tag warn">Vælg aktindsigt</span>'}</td>
         <td data-l="Instans">${esc(k.instans)}</td>
         <td class="date" data-l="Klaget">${fmt(k.dato)}</td>
-        <td data-l="Forventet"><div class="frist c-${ki.cls}"><span class="date">${fmt(k.status === 'Hjemvist til genbehandling' && k.genbehandlingFrist ? k.genbehandlingFrist : k.frist) || '<span class="muted">Ikke oplyst</span>'}</span><div><span class="flabel">${esc(ki.txt)}</span></div></div></td>
+        <td data-l="Forventet"><div class="frist c-${ki.cls}"><span class="date">${fmt(k.frist) || '<span class="muted">Ikke oplyst</span>'}</span><div><span class="flabel">${esc(ki.txt)}</span></div></div></td>
         <td data-l="Resultat">${verdict(k.resultat)}<div class="meta">${esc(k.status)}</div></td></tr>`;
     }).join('') || '<tr><td colspan="5" class="empty">Ingen klager passer på søgningen.</td></tr>'}
   </tbody></table></div>`;
@@ -735,8 +736,8 @@ function klageForm(k = {}, aktId = '') {
       ${isNew ? '' : `<button type="button" class="btn danger right" data-action="trash-klage" data-id="${k.id}">Flyt til papirkurv</button>`}</div>
   </form>`);
   const f = $('f');
-  const toggle = () => { $('genWrap').hidden = !(f.resultat.value === 'Hjemvist' || f.status.value === 'Hjemvist til genbehandling' || f.genbehandlingFrist.value); };
-  f.resultat.addEventListener('change', () => { if (f.resultat.value === 'Hjemvist' && f.status.value === 'Under behandling') f.status.value = 'Hjemvist til genbehandling'; toggle(); });
+  const toggle = () => { $('genWrap').hidden = !(f.resultat.value === 'Hjemvist' || f.genbehandlingFrist.value); };
+  f.resultat.addEventListener('change', () => { f.status.value = f.resultat.value === 'Afventer' ? 'Under behandling' : 'Afgjort'; toggle(); });
   f.status.addEventListener('change', toggle); toggle();
   f.onsubmit = e => {
     e.preventDefault();
@@ -744,8 +745,8 @@ function klageForm(k = {}, aktId = '') {
     if (!o.aktId) err.push('Vælg den aktindsigt, klagen hører til.');
     if (!isYmd(o.dato)) err.push('Klagedato skal udfyldes.');
     if (err.length) { $('ferr').textContent = err.join(' '); return; }
-    if (isNew) S.klager.push({ id: uid(), ...o });
-    else { const t = S.klager.find(x => x.id === k.id); Object.assign(t, o); delete t._emne; }
+    if (isNew) S.klager.push(normKlage({ id: uid(), ...o }));
+    else { const t = S.klager.find(x => x.id === k.id); Object.assign(t, o); delete t._emne; normKlage(t); }
     closeModal(); changed(); toast(isNew ? 'Klagen er oprettet' : 'Ændringerne er gemt i appen');
   };
 }
@@ -1119,7 +1120,7 @@ function bookToState(book) {
       resultat: str(pick(r, 'Resultat', 'Klageresultat/Medhold')) || 'Afventer', genbehandlingFrist: normDate(pick(r, 'Genbehandlingsfrist')), bemaerkning: str(pick(r, 'Bemærkninger'))
     };
     if (!a) { unlinked++; k._emne = em; }
-    st.klager.push(k);
+    st.klager.push(normKlage(k));
     parseHist(r[norm('Historik JSON')]).forEach(h => st.events.push({ id: uid(), sagId: k.id, sagType: 'klage', type: str(h.type) || 'Notat', dato: normDate(h.dato), nyFrist: normDate(h.nyFrist), note: str(h.note) }));
   });
   if (eSheet) {
@@ -1466,7 +1467,7 @@ async function start() {
   let restored = false;
   try {
     const b = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
-    if (b && b.S) { S = { ...emptyState(), ...b.S }; fileName = b.fileName || ''; dirty = !!b.dirty; oldFormat = !!b.oldFormat; restored = true; backupAt = Date.parse(b.savedAt || '') || 0; }
+    if (b && b.S) { S = { ...emptyState(), ...b.S }; S.klager.forEach(normKlage); fileName = b.fileName || ''; dirty = !!b.dirty; oldFormat = !!b.oldFormat; restored = true; backupAt = Date.parse(b.savedAt || '') || 0; }
   } catch { }
   if (false && !restored && migrateOldLocal()) toast('Data fra den gamle version er hentet fra browseren. Gem dem i en Excel-fil.');
   let next = null;
