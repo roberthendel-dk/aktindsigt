@@ -129,7 +129,7 @@ tr.year span{font:400 12px var(--sans);color:var(--muted);margin-left:8px}
 .track{height:6px;background:var(--line-soft);border-radius:99px;overflow:hidden;margin:6px 0 4px;width:150px}
 .track span{display:block;height:100%;border-radius:99px}
 .c-green .track span{background:var(--green-bar)} .c-amber .track span{background:var(--amber-bar)}
-.c-red .track span{background:var(--red)} .c-grey .track span,.c-blue .track span{background:var(--grey-bar)}
+.c-red .track span{background:var(--red)} .c-grey .track span{background:var(--grey-bar)} .c-blue .track span{background:var(--stamp)}
 .flabel{font-size:13px;font-weight:600}
 .c-green .flabel{color:var(--green)} .c-amber .flabel{color:var(--amber)} .c-red .flabel{color:var(--red)} .c-grey .flabel{color:var(--muted)} .c-blue .flabel{color:var(--stamp)}
 
@@ -392,7 +392,7 @@ function aktFristInfo(a) {
   if (n < 0) return { txt: `Overskredet med ${dage(-n)}`, cls: 'red', over: true };
   if (n === 0) return { txt: 'Frist i dag', cls: 'amber', soon: true };
   if (n <= 2) return { txt: `${dage(n)} tilbage`, cls: 'amber', soon: true };
-  return { txt: `${dage(n)} tilbage`, cls: 'green' };
+  return { txt: `${dage(n)} tilbage`, cls: 'blue' };
 }
 function klageInfo(k) {
   if (k.status === 'Afgjort') return { txt: 'Afgjort', cls: 'grey' };
