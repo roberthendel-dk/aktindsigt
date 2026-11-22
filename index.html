@@ -52,6 +52,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .filemenu .menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:7px;cursor:pointer}
 .filemenu .menu button:hover{background:var(--line-soft)}
 .filemenu .menu button:disabled{color:var(--muted);cursor:default;background:none}
+.filemenu .menu hr{border:0;border-top:1px solid var(--line-soft);margin:5px 4px}
 .filemenu .menu p{margin:6px 10px 4px;font-size:12px;color:var(--muted);max-width:220px}
 
 /* ---------- Knapper og felter ---------- */
@@ -229,7 +230,7 @@ tr.year span{font:400 12px var(--sans);color:var(--muted);margin-left:8px}
 <body>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><h1>Aktindsigt &amp; Klager</h1><small>Version 4.1, udviklet af RH 🤓</small></div>
+    <div class="brand"><h1>Aktindsigt &amp; Klager</h1><small>Version 4.2, udviklet af RH 🤓</small></div>
     <nav class="tabs" aria-label="Hovedmenu">
       <button data-view="akt">Aktindsigter <span class="n" id="cAkt">0</span></button>
       <button data-view="klage">Klager <span class="n" id="cKlage">0</span></button>
@@ -244,7 +245,11 @@ tr.year span{font:400 12px var(--sans);color:var(--muted);margin-left:8px}
         <div class="menu">
           <button data-action="open">Åbn Excel-fil…</button>
           <button data-action="open-recent" id="recentBtn">Åbn senest brugte fil</button>
+          <button data-action="dbx-open" id="dbxOpenBtn">Åbn fra Dropbox…</button>
+          <hr>
           <button data-action="saveas">Gem som ny fil…</button>
+          <button data-action="dbx-saveas" id="dbxSaveBtn">Gem i Dropbox som…</button>
+          <hr>
           <button data-action="new">Start en tom fil</button>
           <p id="fileNote"></p>
         </div>
@@ -285,9 +290,11 @@ tr.year span{font:400 12px var(--sans);color:var(--muted);margin-left:8px}
 /* =====================================================================
    Konstanter
    ===================================================================== */
-const VERSION = '4.1';
+const VERSION = '4.2';
 const LOVFRIST = 7; // arbejdsdage, offentlighedslovens § 36
 const LS_KEY = 'aktindsigt_klager_v4';
+// Dropbox: indsæt app-nøglen (App key) fra Dropbox App Console. Tom = Dropbox er slået fra.
+const DROPBOX_APP_KEY = 'zjg5dswmxtqrnrx';
 const AKT_STATUS = ['Under behandling', 'Afgjort'];
 const AKT_AFG = ['Afventer', 'Fuld aktindsigt', 'Delvis aktindsigt', 'Afslag', 'Henlagt'];
 const KL_INSTANS = ['Ankestyrelsen', 'Folketingets Ombudsmand', 'Datatilsynet', 'Nævnenes Hus', 'Anden'];
@@ -432,13 +439,13 @@ function render() {
 function renderFile() {
   let state, cls;
   if (!fileName) { cls = dirty ? 'dirty' : 'none'; state = dirty ? 'Ikke gemt i en fil' : 'Ingen fil åben'; }
-  else if (handlePending) { cls = dirty ? 'dirty' : 'none'; state = dirty ? 'Ikke gemt, filen er ikke hentet' : 'Filen er ikke hentet endnu'; }
-  else if (dirty) { cls = 'dirty'; state = 'Ikke gemt'; }
-  else { cls = 'saved'; state = oldFormat ? 'Gammelt format, gem for at konvertere' : 'Alt er gemt'; }
+  else if (handlePending || dbxPending) { cls = dirty ? 'dirty' : 'none'; state = dirty ? 'Ikke gemt, filen er ikke hentet' : 'Filen er ikke hentet endnu'; }
+  else if (dirty) { cls = 'dirty'; state = dbx ? 'Ikke gemt i Dropbox' : 'Ikke gemt'; }
+  else { cls = 'saved'; state = oldFormat ? 'Gammelt format, gem for at konvertere' : dbx ? 'Alt er gemt i Dropbox' : 'Alt er gemt'; }
   if (oldFormat && dirty) state = 'Ikke gemt, gammelt format';
   $('fileChip').innerHTML = `<span class="name" title="${esc(fileName)}">${esc(fileName || 'Ingen Excel-fil')}</span><span class="state ${cls}"><span class="dot"></span>${esc(state)}</span>`
 
-  $('fileNote').textContent = canFS ? '“Gem” skriver direkte i den åbne Excel-fil.' : 'Din browser kan ikke skrive direkte i filen. “Gem” henter en ny kopi til Overførsler.';
+  $('fileNote').textContent = dbx ? '“Gem” gemmer filen i Dropbox.' : canFS ? '“Gem” skriver direkte i den åbne Excel-fil.' : 'Din browser kan ikke skrive direkte i filen. “Gem” henter en ny kopi til Overførsler.';
 }
 
 function renderResume() {
@@ -446,6 +453,11 @@ function renderResume() {
   rb.disabled = !canFS || !lastName;
   rb.textContent = lastName ? 'Åbn senest brugte fil (' + lastName + ')' : 'Åbn senest brugte fil';
   rb.title = !canFS ? 'Kræver Chrome eller Edge' : !lastName ? 'Du har ikke åbnet en fil i appen endnu' : '';
+  for (const id of ['dbxOpenBtn', 'dbxSaveBtn']) { $(id).hidden = !DROPBOX_APP_KEY; $(id).disabled = !dbxReady(); $(id).title = dbxReady() ? '' : 'Dropbox virker kun, når appen åbnes fra sin webadresse'; }
+  if (dbxPending && dbx) {
+    $('resume').innerHTML = `<div class="resume"><div><b>${esc(dbx.name)} kunne ikke hentes fra Dropbox</b><div class="meta">${dirty ? 'Dine ændringer, som ikke er gemt, er bevaret.' : 'Det, du ser nu, er browserens kopi.'} Tjek internetforbindelsen, og prøv igen.</div></div><button class="btn primary" data-action="dbx-reload">Prøv igen</button></div>`;
+    return;
+  }
   if (!handlePending) { $('resume').innerHTML = ''; return; }
   const txt = dirty
     ? 'Du har ændringer fra sidst, som ikke er gemt. De bliver bevaret, og du kan gemme dem i filen bagefter.'
@@ -1127,14 +1139,14 @@ async function openFile() {
   } else $('fileInput').click();
 }
 
-async function loadFile(file, handle) {
+async function loadFile(file, handle, dbxMeta, quiet) {
   const buf = await file.arrayBuffer();
   const book = await readXlsx(buf);
   const { state, isOld, notes, assigned } = bookToState(book);
   S = state; fileHandle = handle || null; fileName = file.name; fileModified = file.lastModified; dirty = !!assigned; oldFormat = isOld; handlePending = false;
-  if (handle) rememberHandle(handle); else forgetHandle();
+  if (dbxMeta) setDbxSource(dbxMeta); else { setDbxSource(null); if (handle) rememberHandle(handle); else forgetHandle(); }
   saveLocal(); render();
-  const msg = `Indlæst: ${S.akt.length} aktindsigter, ${S.klager.length} klager, ${S.events.length} hændelser.`;
+  const msg = `${dbxMeta ? 'Hentet fra Dropbox' : 'Indlæst'}: ${S.akt.length} aktindsigter, ${S.klager.length} klager, ${S.events.length} hændelser.`;
   if (notes.length || isOld) {
     openModal('Filen er åbnet', `<p>${esc(msg)}</p>${isOld ? '<p><b>Filen er i det gamle format.</b> Alt er læst ind. Når du trykker “Gem Excel”, konverteres filen til det nye format med ID-kolonner, rigtige datoer og et ark med hændelser. Tag eventuelt en kopi af den gamle fil først.</p>' : ''}${notes.length ? '<ul>' + notes.map(n => `<li>${esc(n)}</li>`).join('') + '</ul>' : ''}<div class="formbtns mt"><button class="btn primary" data-action="close">OK</button></div>`);
   } else toast(msg);
@@ -1151,6 +1163,7 @@ function lockedMsg(e) {
 }
 
 async function saveFile() {
+  if (dbx) return dbxSave();
   if (!fileHandle && handlePending) {
     const h = await recallHandle();
     if (h) {
@@ -1180,7 +1193,7 @@ async function saveAs() {
     try {
       const h = await window.showSaveFilePicker({ suggestedName: suggested, types: XLSX_TYPES });
       await writeToHandle(h);
-      fileHandle = h; fileName = h.name; dirty = false; oldFormat = false; handlePending = false; rememberHandle(h); saveLocal(); render(); toast('Gemt som ' + fileName);
+      fileHandle = h; fileName = h.name; dirty = false; oldFormat = false; handlePending = false; setDbxSource(null); rememberHandle(h); saveLocal(); render(); toast('Gemt som ' + fileName);
     } catch (e) { if (e.name !== 'AbortError') showError('Filen kunne ikke gemmes', { message: lockedMsg(e) }); }
   } else {
     try {
@@ -1197,7 +1210,7 @@ async function saveAs() {
 function newFile() {
   if (!confirmDiscard()) return;
   if (!dirty && (S.akt.length || S.klager.length) && !confirm('Starte en ny, tom fil? Den nuværende Excel-fil bliver ikke ændret.')) return;
-  S = emptyState(); fileHandle = null; fileName = ''; dirty = false; oldFormat = false; handlePending = false; forgetHandle(); saveLocal(); render();
+  S = emptyState(); fileHandle = null; fileName = ''; dirty = false; oldFormat = false; handlePending = false; dbxPending = false; setDbxSource(null); forgetHandle(); saveLocal(); render();
 }
 
 async function openRecent() {
@@ -1227,6 +1240,185 @@ function showError(title, e) {
 }
 function toast(s) { document.querySelectorAll('.toast').forEach(t => t.remove()); const d = document.createElement('div'); d.className = 'toast'; d.setAttribute('role', 'status'); d.textContent = s; document.body.appendChild(d); setTimeout(() => d.remove(), 3500); }
 
+
+/* =====================================================================
+   Dropbox: åbn og gem Excel-filen direkte i Dropbox (alle browsere, også iPhone/iPad)
+   Logger ind med OAuth 2 + PKCE, så der ingen hemmelig nøgle ligger i appen.
+   Appen har kun adgang til sin egen mappe: Dropbox/Apps/<appens navn>/
+   ===================================================================== */
+const DBX_AUTH_KEY = 'aktindsigt_dbx_auth', DBX_FILE_KEY = 'aktindsigt_dbx_file';
+const DBX_REDIRECT = location.origin + location.pathname;
+const dbxReady = () => !!DROPBOX_APP_KEY && /^https?:/.test(location.protocol);
+let dbx = null, dbxPending = false, leavingForAuth = false;
+
+const dbxAuth = () => { try { return JSON.parse(localStorage.getItem(DBX_AUTH_KEY) || 'null'); } catch { return null; } };
+const setDbxAuth = a => a ? localStorage.setItem(DBX_AUTH_KEY, JSON.stringify(a)) : localStorage.removeItem(DBX_AUTH_KEY);
+const setDbxFile = m => m ? localStorage.setItem(DBX_FILE_KEY, JSON.stringify(m)) : localStorage.removeItem(DBX_FILE_KEY);
+const dbxStoredFile = () => { try { return JSON.parse(localStorage.getItem(DBX_FILE_KEY) || 'null'); } catch { return null; } };
+const b64url = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const randStr = n => b64url(crypto.getRandomValues(new Uint8Array(n)));
+const hdrJson = o => JSON.stringify(o).replace(/[\u007f-￿]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+
+class DbxError extends Error { constructor(msg, status, summary) { super(msg); this.status = status; this.summary = summary || ''; } }
+
+async function dbxLogin(next) {
+  if (!dbxReady()) { toast('Dropbox er ikke sat op i denne udgave af appen.'); return; }
+  const verifier = randStr(48), state = randStr(16);
+  const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  sessionStorage.setItem('dbx_pkce', JSON.stringify({ verifier, state, next }));
+  saveLocal(); leavingForAuth = true;
+  const p = new URLSearchParams({ client_id: DROPBOX_APP_KEY, response_type: 'code', code_challenge: challenge, code_challenge_method: 'S256', redirect_uri: DBX_REDIRECT, token_access_type: 'offline', state });
+  location.href = 'https://www.dropbox.com/oauth2/authorize?' + p;
+}
+
+/* Når Dropbox sender brugeren tilbage efter login. Returnerer den handling, der skal fortsættes med. */
+async function dbxHandleReturn() {
+  const u = new URL(location.href);
+  if (!u.searchParams.has('code') && !u.searchParams.has('error')) return null;
+  const pk = JSON.parse(sessionStorage.getItem('dbx_pkce') || 'null'); sessionStorage.removeItem('dbx_pkce');
+  history.replaceState(null, '', DBX_REDIRECT);
+  if (u.searchParams.has('error')) { toast('Du blev ikke logget ind i Dropbox.'); return null; }
+  if (!pk || pk.state !== u.searchParams.get('state')) { toast('Login i Dropbox mislykkedes. Prøv igen.'); return null; }
+  const r = await fetch('https://api.dropboxapi.com/oauth2/token', { method: 'POST', body: new URLSearchParams({ code: u.searchParams.get('code'), grant_type: 'authorization_code', code_verifier: pk.verifier, client_id: DROPBOX_APP_KEY, redirect_uri: DBX_REDIRECT }) });
+  if (!r.ok) { toast('Login i Dropbox mislykkedes. Prøv igen.'); return null; }
+  const t = await r.json();
+  setDbxAuth({ refresh: t.refresh_token, access: t.access_token, exp: Date.now() + (t.expires_in || 14400) * 1000, account: t.account_id });
+  return pk.next || 'open';
+}
+
+async function dbxToken(force) {
+  const a = dbxAuth(); if (!a) throw new DbxError('login', 401);
+  if (!force && a.access && a.exp > Date.now() + 60000) return a.access;
+  const r = await fetch('https://api.dropboxapi.com/oauth2/token', { method: 'POST', body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: a.refresh, client_id: DROPBOX_APP_KEY }) });
+  if (r.status === 400 || r.status === 401) { setDbxAuth(null); throw new DbxError('login', 401); }
+  if (!r.ok) throw new DbxError('Dropbox svarede ikke. Prøv igen om lidt.', r.status);
+  const t = await r.json();
+  a.access = t.access_token; a.exp = Date.now() + (t.expires_in || 14400) * 1000; setDbxAuth(a);
+  return a.access;
+}
+
+/* Kalder Dropbox og forsøger én gang igen med ny adgangsnøgle, hvis den er udløbet */
+async function dbxFetch(url, opts, retry = true) {
+  let r;
+  try { r = await fetch(url, { ...opts, headers: { ...opts.headers, Authorization: 'Bearer ' + await dbxToken() } }); }
+  catch (e) { if (e instanceof DbxError) throw e; throw new DbxError('Appen kunne ikke få forbindelse til Dropbox. Tjek internetforbindelsen.', 0); }
+  if (r.status === 401 && retry) { await dbxToken(true); return dbxFetch(url, opts, false); }
+  if (!r.ok) {
+    let summary = ''; try { const j = await r.json(); summary = j.error_summary || ''; } catch { }
+    throw new DbxError(summary.startsWith('path/not_found') ? 'Filen findes ikke længere i Dropbox.' : 'Dropbox gav en fejl: ' + (summary || r.status), r.status, summary);
+  }
+  return r;
+}
+const dbxRpc = async (ep, body) => (await dbxFetch('https://api.dropboxapi.com/2/' + ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+
+async function dbxDownload(path) {
+  const r = await dbxFetch('https://content.dropboxapi.com/2/files/download', { method: 'POST', headers: { 'Dropbox-API-Arg': hdrJson({ path }) } });
+  const meta = JSON.parse(r.headers.get('Dropbox-API-Result') || '{}');
+  return { bytes: await r.arrayBuffer(), meta };
+}
+async function dbxUpload(path, bytes, mode) {
+  const r = await dbxFetch('https://content.dropboxapi.com/2/files/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'Dropbox-API-Arg': hdrJson({ path, mode, autorename: false, mute: true }) }, body: bytes });
+  return r.json();
+}
+const isConflict = e => e instanceof DbxError && e.status === 409 && /conflict/.test(e.summary);
+const needLogin = e => e instanceof DbxError && e.message === 'login';
+function dbxFail(title, e, next) {
+  if (needLogin(e)) { openModal('Log ind i Dropbox igen', `<p>Forbindelsen til Dropbox er udløbet eller blevet afbrudt. Log ind igen for at fortsætte. Dine data i appen bliver bevaret.</p><div class="formbtns mt"><button class="btn primary" data-action="dbx-login" data-next="${next || 'open'}">Log ind i Dropbox</button><button class="btn" data-action="close">Annuller</button></div>`); return; }
+  showError(title, { message: e?.message || String(e) });
+}
+
+function setDbxSource(meta) {
+  dbx = meta ? { path: meta.path_display || meta.path_lower || meta.path, name: meta.name, rev: meta.rev } : null;
+  setDbxFile(dbx);
+}
+
+/* Vis Excel-filerne i appens Dropbox-mappe */
+async function dbxPicker() {
+  if (!dbxAuth()) return dbxLogin('open');
+  openModal('Åbn fra Dropbox', '<p class="muted">Henter listen over filer…</p>');
+  try {
+    let res = await dbxRpc('files/list_folder', { path: '', recursive: false }), all = res.entries;
+    while (res.has_more) { res = await dbxRpc('files/list_folder/continue', { cursor: res.cursor }); all = all.concat(res.entries); }
+    const files = all.filter(f => f['.tag'] === 'file' && /\.xlsx$/i.test(f.name)).sort((a, b) => (b.server_modified || '').localeCompare(a.server_modified || ''));
+    const when = s => { const d = new Date(s); return isNaN(d) ? '' : d.toLocaleString('da-DK', { dateStyle: 'medium', timeStyle: 'short' }); };
+    $('modalBody').innerHTML = files.length
+      ? `<p class="muted">Excel-filer i appens mappe i din Dropbox.</p><div class="register"><table><tbody>${files.map(f => `<tr><td><b>${esc(f.name)}</b><div class="meta">Ændret ${esc(when(f.server_modified))}</div></td><td style="text-align:right;vertical-align:middle"><button class="btn sm primary" data-action="dbx-open-file" data-path="${esc(f.path_display || f.path_lower)}">Åbn</button></td></tr>`).join('')}</tbody></table></div>
+         <div class="formbtns mt"><button class="btn" data-action="close">Annuller</button><button class="linkbtn right" data-action="dbx-disconnect">Afbryd forbindelsen til Dropbox</button></div>`
+      : `<p>Der er ingen Excel-filer i appens mappe i din Dropbox endnu. Mappen hedder <b>Apps</b> og ligger øverst i din Dropbox. Inde i den har appen sin egen mappe.</p>
+         <p>Du kan enten lægge din Excel-fil i den mappe og prøve igen, eller åbne filen her i appen og vælge “Gem i Dropbox som…”.</p>
+         <div class="formbtns mt"><button class="btn primary" data-action="dbx-open">Prøv igen</button><button class="btn" data-action="close">Luk</button></div>`;
+  } catch (e) { closeModal(); dbxFail('Dropbox kunne ikke vise dine filer', e, 'open'); }
+}
+
+async function dbxOpen(path, quiet) {
+  const { bytes, meta } = await dbxDownload(path);
+  const file = new File([bytes], meta.name || path.split('/').pop(), { lastModified: Date.parse(meta.server_modified || '') || Date.now() });
+  await loadFile(file, null, meta, quiet);
+  dbxPending = false; render();
+}
+
+async function dbxSave() {
+  let bytes;
+  try {
+    bytes = await buildXlsx(workbookSheets());
+    let meta;
+    try { meta = await dbxUpload(dbx.path, bytes, dbx.rev ? { '.tag': 'update', update: dbx.rev } : { '.tag': 'overwrite' }); }
+    catch (e) {
+      if (!isConflict(e)) throw e;
+      if (!confirm(`“${dbx.name}” er blevet ændret i Dropbox, fx på en anden enhed, siden du hentede den.\n\nVil du overskrive filen i Dropbox med det, du ser i appen nu?\n\nVælg Annuller, hvis du hellere vil hente den nyeste version via Fil → Åbn fra Dropbox. Så mister du dog de ændringer, du ikke har gemt.`)) return;
+      meta = await dbxUpload(dbx.path, bytes, { '.tag': 'overwrite' });
+    }
+    setDbxSource(meta); fileName = meta.name; dirty = false; oldFormat = false; dbxPending = false; saveLocal(); render(); toast('Gemt i Dropbox');
+  } catch (e) { dbxFail('Filen kunne ikke gemmes i Dropbox', e, 'save'); }
+}
+
+function dbxSaveAsForm() {
+  if (!dbxAuth()) return dbxLogin('saveas');
+  const suggested = (fileName || 'Aktindsigt-og-klager.xlsx').replace(/\.xlsx$/i, '') + '.xlsx';
+  openModal('Gem i Dropbox som…', `<form id="f" novalidate><label for="dbxName">Filnavn</label><input id="dbxName" name="name" value="${esc(suggested)}" autocomplete="off">
+    <div class="hint">Filen gemmes i appens mappe i din Dropbox (Apps).</div><div class="err" id="ferr" role="alert"></div>
+    <div class="formbtns mt"><button class="btn primary">Gem i Dropbox</button><button type="button" class="btn" data-action="close">Annuller</button></div></form>`);
+  $('f').onsubmit = async ev => {
+    ev.preventDefault();
+    let name = $('dbxName').value.trim().replace(/[\\/:*?"<>|]/g, '-');
+    if (!name) { $('ferr').textContent = 'Skriv et filnavn.'; return; }
+    if (!/\.xlsx$/i.test(name)) name += '.xlsx';
+    closeModal();
+    try {
+      const bytes = await buildXlsx(workbookSheets());
+      let meta;
+      try { meta = await dbxUpload('/' + name, bytes, { '.tag': 'add' }); }
+      catch (e) {
+        if (!isConflict(e)) throw e;
+        if (!confirm(`Der findes allerede en fil, der hedder “${name}”, i Dropbox. Vil du overskrive den?`)) return;
+        meta = await dbxUpload('/' + name, bytes, { '.tag': 'overwrite' });
+      }
+      setDbxSource(meta); fileHandle = null; handlePending = false; fileName = meta.name; dirty = false; oldFormat = false; dbxPending = false;
+      saveLocal(); render(); toast('Gemt i Dropbox som ' + meta.name);
+    } catch (e) { dbxFail('Filen kunne ikke gemmes i Dropbox', e, 'saveas'); }
+  };
+}
+
+async function dbxDisconnect() {
+  if (!confirm('Afbryde forbindelsen til Dropbox på denne enhed? Filen i Dropbox bliver ikke slettet, og dine data i appen bliver liggende.')) return;
+  try { await dbxRpc('auth/token/revoke', null); } catch { }
+  setDbxAuth(null);
+  if (dbx) { setDbxSource(null); fileName = ''; dbxPending = false; }
+  closeModal(); saveLocal(); render(); toast('Forbindelsen til Dropbox er afbrudt');
+}
+
+async function dbxStart(next) {
+  const stored = dbxStoredFile();
+  if (next === 'open') { await dbxPicker(); return; }
+  if (next === 'saveas') { dbxSaveAsForm(); return; }
+  if (!stored || !dbxAuth()) return;
+  dbx = stored; fileName = stored.name; handlePending = false;
+  if (next === 'save') { await dbxSave(); return; }
+  if (dirty) { toast('Du har ændringer fra sidst, som ikke er gemt i Dropbox.'); return; }
+  try { await dbxOpen(stored.path, true); }
+  catch (e) { dbxPending = true; render(); if (needLogin(e)) dbxFail('', e, 'reload'); }
+}
+
 /* =====================================================================
    Opstart
    ===================================================================== */
@@ -1252,10 +1444,13 @@ async function start() {
     if (b && b.S) { S = { ...emptyState(), ...b.S }; fileName = b.fileName || ''; dirty = !!b.dirty; oldFormat = !!b.oldFormat; restored = true; backupAt = Date.parse(b.savedAt || '') || 0; }
   } catch { }
   if (!restored && migrateOldLocal()) toast('Data fra den gamle version er hentet fra browseren. Gem dem i en Excel-fil.');
+  let next = null;
+  if (dbxReady()) { try { next = await dbxHandleReturn(); } catch { toast('Login i Dropbox mislykkedes. Prøv igen.'); } }
+  const useDbx = dbxReady() && !!dbxStoredFile() && !!dbxAuth();
   if (canFS) {
     const h = await recallHandle();
     lastName = h?.name || '';
-    if (h && (!fileName || h.name === fileName)) {
+    if (h && !useDbx && (!fileName || h.name === fileName)) {
       if (!fileName) fileName = h.name;
       try {
         const p = await h.queryPermission({ mode: 'readwrite' });
@@ -1267,6 +1462,7 @@ async function start() {
     }
   }
   render();
+  if (dbxReady() && (next || useDbx)) { await dbxStart(next); return; }
   if (restored && dirty && !handlePending) toast('Du har ændringer fra sidst, som ikke er gemt i Excel-filen.');
 }
 
@@ -1285,6 +1481,16 @@ document.addEventListener('click', e => {
     case 'new': newFile(); break;
     case 'reconnect': reconnect(); break;
     case 'open-recent': openRecent(); break;
+    case 'dbx-open': dbxPicker(); break;
+    case 'dbx-saveas': dbxSaveAsForm(); break;
+    case 'dbx-disconnect': dbxDisconnect(); break;
+    case 'dbx-login': closeModal(); dbxLogin(b.dataset.next || 'open'); break;
+    case 'dbx-open-file': if (confirmDiscard()) { closeModal(); dbxOpen(b.dataset.path).catch(err => dbxFail('Filen kunne ikke hentes fra Dropbox', err, 'open')); } break;
+    case 'dbx-reload':
+      if (!dbx) break;
+      (dirty ? dbxRpc('files/get_metadata', { path: dbx.path }).then(() => { dbxPending = false; render(); toast('Forbindelsen til Dropbox virker igen. Husk at gemme.'); }) : dbxOpen(dbx.path))
+        .catch(err => { dbxPending = true; render(); dbxFail('Filen kunne ikke hentes fra Dropbox', err, 'reload'); });
+      break;
     case 'close': closeModal(); break;
     case 'new-item': view === 'klage' ? klageForm() : aktForm(); break;
     case 'edit-akt': aktForm(aktById(id)); break;
@@ -1311,7 +1517,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { if (!$('modal').hidden) closeModal(); else if (drawerId) closeDrawer(); else $('fileMenu').open = false; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveFile(); }
 });
-window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if (dirty && !leavingForAuth) { e.preventDefault(); e.returnValue = ''; } });
 start();
 </script>
 </body>
