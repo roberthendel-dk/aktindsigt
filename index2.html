@@ -1,0 +1,1524 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aktindsigt & Klager</title>
+<style>
+/* Aktindsigt & Klager 4.1
+   Idé: et sagsregister. Rolig, kølig papirflade, stempelblå som eneste accentfarve,
+   sagstitler sat i en dokument-serif. Fristerne er det, man skal kunne aflæse på et øjeblik,
+   så hver sag har en lille fristbjælke, der viser, hvor meget af fristen der er brugt. */
+:root{
+  --bg:#EEF1F4; --surface:#FFFFFF; --ink:#1B2430; --muted:#667080; --line:#DCE1E7; --line-soft:#EBEEF2;
+  --stamp:#24479A; --stamp-ink:#1A3576; --stamp-soft:#E8EDF8;
+  --red:#B8322A; --red-soft:#FBEAE8; --amber:#9A5B0C; --amber-bar:#D69222; --amber-soft:#FCF2E0;
+  --green:#2E7A4E; --green-bar:#4C9A6C; --green-soft:#E6F3EB; --grey-bar:#AEB6C1;
+  --serif:"Iowan Old Style","Charter","Bitstream Charter","Sitka Text","Palatino Linotype","Book Antiqua",Georgia,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid #7FA2E8;outline-offset:2px;border-radius:6px}
+[hidden]{display:none!important}
+
+/* ---------- Topbjælke ---------- */
+.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
+.top-inner{max-width:1320px;margin:0 auto;padding:0 28px;display:flex;align-items:stretch;gap:36px;min-height:64px}
+.brand{display:flex;flex-direction:column;justify-content:center}
+.brand h1{font:700 21px/1.1 var(--serif);margin:0;letter-spacing:-.005em}
+.brand small{font-size:12px;color:var(--muted)}
+.tabs{display:flex;gap:4px;align-items:stretch}
+.tabs button{border:0;background:none;padding:0 14px;cursor:pointer;color:var(--muted);font-weight:600;border-bottom:3px solid transparent;margin-bottom:-1px;display:flex;align-items:center;gap:8px}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-current="page"]{color:var(--stamp-ink);border-bottom-color:var(--stamp)}
+.tabs .n{font-size:12px;font-weight:700;background:var(--line-soft);color:var(--muted);border-radius:999px;padding:1px 7px}
+.tabs button[aria-current="page"] .n{background:var(--stamp-soft);color:var(--stamp-ink)}
+.filearea{margin-left:auto;display:flex;align-items:center;gap:10px}
+.filechip{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;max-width:260px}
+.filechip .name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.filechip .state{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.state.saved .dot{background:var(--green-bar)}
+.state.dirty{color:var(--amber);font-weight:700}
+.state.dirty .dot{background:var(--amber-bar)}
+.state.none .dot{background:var(--grey-bar)}
+.filemenu{position:relative}
+.filemenu summary{list-style:none}
+.filemenu summary::-webkit-details-marker{display:none}
+.filemenu .menu{position:absolute;right:0;top:calc(100% + 6px);background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(27,36,48,.14);padding:6px;min-width:200px;z-index:40}
+.filemenu .menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:7px;cursor:pointer}
+.filemenu .menu button:hover{background:var(--line-soft)}
+.filemenu .menu button:disabled{color:var(--muted);cursor:default;background:none}
+.filemenu .menu hr{border:0;border-top:1px solid var(--line-soft);margin:5px 4px}
+.filemenu .menu p{margin:6px 10px 4px;font-size:12px;color:var(--muted);max-width:220px}
+
+/* ---------- Knapper og felter ---------- */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:#C3CAD3;background:#F8F9FB}
+.btn.primary{background:var(--stamp);border-color:var(--stamp);color:#fff}
+.btn.primary:hover{background:var(--stamp-ink)}
+.btn.danger{color:var(--red);border-color:#EFC9C5}
+.btn.danger:hover{background:var(--red-soft)}
+.btn.sm{padding:4px 10px;font-size:13px}
+.linkbtn{border:0;background:none;padding:0;color:var(--stamp);font-weight:600;cursor:pointer;font-size:13px}
+.linkbtn:hover{text-decoration:underline}
+input,select,textarea{width:100%;border:1px solid #CBD2DA;border-radius:8px;padding:8px 10px;background:#fff}
+input:disabled{background:var(--line-soft);color:var(--muted)}
+textarea{min-height:84px;resize:vertical}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.hint{font-size:12px;color:var(--muted);margin-top:4px}
+
+/* ---------- Hovedindhold ---------- */
+main{max-width:1320px;margin:0 auto;padding:28px 28px 60px}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.pagehead h2{font:700 30px/1.1 var(--serif);margin:0;letter-spacing:-.01em}
+.pagehead p{margin:6px 0 0;color:var(--muted)}
+
+/* Nøgletal i én strimmel */
+.figures{display:flex;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:20px}
+.fig{flex:1 1 150px;padding:14px 20px;border-left:1px solid var(--line-soft)}
+.fig:first-child{border-left:0}
+.fig .v{font-size:26px;font-weight:700;line-height:1.1}
+.fig .l{font-size:13px;color:var(--muted)}
+.fig.alert .v{color:var(--red)}
+.fig.warn .v{color:var(--amber)}
+
+/* Kræver handling */
+.attention{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--red);border-radius:12px;margin-bottom:24px;overflow:hidden}
+.attention h3{font:700 17px/1.2 var(--serif);margin:0;padding:14px 18px 10px}
+.att{display:grid;grid-template-columns:1fr auto auto;gap:16px;align-items:center;padding:10px 18px;border-top:1px solid var(--line-soft)}
+.att .t{font-family:var(--serif);font-weight:600;font-size:16px}
+.att .m{font-size:13px;color:var(--muted)}
+.resume{background:var(--stamp-soft);border:1px solid #C9D5EE;border-left:4px solid var(--stamp);border-radius:12px;padding:14px 18px;margin-bottom:20px;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.resume b{font:700 17px/1.3 var(--serif)}
+.resume .meta{color:#3D4C66}
+.calm{color:var(--muted);font-size:14px;margin:-6px 0 22px;display:flex;align-items:center;gap:8px}
+
+/* Søgning og filtre */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.toolbar input{flex:1 1 280px;width:auto}
+.toolbar select{width:auto;min-width:180px}
+
+/* Registret */
+.register{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:13px;font-weight:600;color:var(--muted);text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);background:#FAFBFC;white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr.case{cursor:pointer}
+tbody tr.case:hover td{background:#F7F9FC}
+tbody tr.case td:first-child{box-shadow:inset 3px 0 0 transparent}
+tbody tr.case.s-red td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+tbody tr.case.s-amber td:first-child{box-shadow:inset 3px 0 0 var(--amber-bar)}
+tr.year td{background:var(--bg);font:700 15px/1 var(--serif);color:var(--ink);padding:10px 14px;border-bottom:1px solid var(--line)}
+tr.year span{font:400 12px var(--sans);color:var(--muted);margin-left:8px}
+.ctitle{font:600 16px/1.3 var(--serif);border:0;background:none;padding:0;text-align:left;cursor:pointer;color:var(--ink)}
+.ctitle:hover{color:var(--stamp);text-decoration:underline}
+.meta{font-size:13px;color:var(--muted);margin-top:2px}
+.tag{display:inline-block;font-size:12px;font-weight:600;border-radius:5px;padding:1px 7px;margin-top:5px;background:var(--stamp-soft);color:var(--stamp-ink)}
+.tag.warn{background:var(--amber-soft);color:var(--amber)}
+.date{white-space:nowrap}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.empty{padding:36px;text-align:center;color:var(--muted)}
+
+/* Fristbjælke */
+.frist{min-width:170px}
+.track{height:6px;background:var(--line-soft);border-radius:99px;overflow:hidden;margin:6px 0 4px;width:150px}
+.track span{display:block;height:100%;border-radius:99px}
+.c-green .track span{background:var(--green-bar)} .c-amber .track span{background:var(--amber-bar)}
+.c-red .track span{background:var(--red)} .c-grey .track span,.c-blue .track span{background:var(--grey-bar)}
+.flabel{font-size:13px;font-weight:600}
+.c-green .flabel{color:var(--green)} .c-amber .flabel{color:var(--amber)} .c-red .flabel{color:var(--red)} .c-grey .flabel{color:var(--muted)} .c-blue .flabel{color:var(--stamp)}
+
+/* Afgørelse */
+.verdict{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.v-good .dot{background:var(--green-bar)} .v-mid .dot{background:var(--amber-bar)} .v-bad .dot{background:var(--red)} .v-none .dot{background:transparent;border:1.5px solid var(--grey-bar)}
+
+/* Statistik */
+.stat-bar{display:flex;align-items:center;gap:10px}
+.stat-bar .b{height:8px;width:120px;background:var(--line-soft);border-radius:99px;overflow:hidden}
+.stat-bar .b span{display:block;height:100%;background:var(--red)}
+.explain{font-size:14px;color:var(--muted);max-width:78ch;margin:0 0 16px}
+.split{display:grid;grid-template-columns:1fr;gap:20px}
+.split .panel .dist{max-width:560px}
+.stat-bar .small{white-space:nowrap}
+.section-h .btn{font:600 13px/1.4 var(--sans)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.panel h3{font:700 17px/1.2 var(--serif);margin:0 0 12px}
+.dist{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:14px}
+.dist .b{grid-column:1/-1;height:6px;background:var(--line-soft);border-radius:99px;overflow:hidden;margin-bottom:10px}
+.dist .b span{display:block;height:100%;background:var(--stamp)}
+
+/* ---------- Sagspanel (skuffe) ---------- */
+.scrim{position:fixed;inset:0;background:rgba(27,36,48,.28);z-index:45}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:50;box-shadow:-16px 0 40px rgba(27,36,48,.16);display:flex;flex-direction:column}
+.dhead{padding:20px 24px 16px;border-bottom:1px solid var(--line)}
+.dhead .kind{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.dhead h3{font:700 24px/1.2 var(--serif);margin:6px 0 2px}
+.xbtn{border:0;background:none;font-size:24px;line-height:1;cursor:pointer;padding:2px 8px;border-radius:6px;color:var(--muted)}
+.xbtn:hover{background:var(--line-soft);color:var(--ink)}
+.dbody{padding:20px 24px 40px;overflow-y:auto;flex:1}
+.dactions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px;margin:0 0 22px}
+.facts div{min-width:0}
+.facts dt{font-size:12px;color:var(--muted)}
+.facts dd{margin:1px 0 0;font-weight:600;overflow-wrap:anywhere}
+.section-h{font:700 17px/1.2 var(--serif);margin:26px 0 10px;display:flex;justify-content:space-between;align-items:center}
+.notes{white-space:pre-wrap;background:#FAFBFC;border:1px solid var(--line-soft);border-radius:8px;padding:10px 12px;font-size:14px}
+.subcase{border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.subcase .facts{margin:10px 0 0}
+.flow{list-style:none;margin:0;padding:0}
+.flow li{position:relative;padding:0 0 14px 22px;border-left:2px solid var(--line);margin-left:5px}
+.flow li:last-child{border-left-color:transparent}
+.flow li::before{content:"";position:absolute;left:-7px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--grey-bar)}
+.flow li.k-deadline::before{border-color:var(--amber-bar)}
+.flow li.k-answer::before{border-color:var(--green-bar);background:var(--green-bar)}
+.flow li.k-klage::before{border-color:var(--stamp)}
+.flow li.k-event::before{border-color:var(--ink)}
+.flow li.future{color:var(--muted)}
+.flow .fd{font-size:13px;color:var(--muted)}
+.flow .ft{font-weight:600}
+.flow .fn{font-size:14px;color:var(--muted);white-space:pre-wrap}
+.flow .today{padding-bottom:12px}
+.flow .today::before{border-color:var(--stamp);background:var(--stamp)}
+.flow .today .ft{color:var(--stamp);font-size:13px}
+
+/* ---------- Dialog ---------- */
+.modal{position:fixed;inset:0;background:rgba(27,36,48,.42);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;z-index:60;overflow-y:auto}
+.modalbox{background:var(--surface);width:min(760px,100%);border-radius:14px;box-shadow:0 24px 60px rgba(27,36,48,.25)}
+.modalhead{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--line)}
+.modalhead h3{margin:0;font:700 21px/1.2 var(--serif)}
+.modalbody{padding:22px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.full{grid-column:1/-1}
+.formbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.formbtns .right{margin-left:auto}
+.err{color:var(--red);font-size:14px;font-weight:600}
+.err:empty{display:none}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:var(--ink);color:#fff;padding:11px 18px;border-radius:10px;z-index:100;max-width:min(520px,90vw);box-shadow:0 10px 30px rgba(0,0,0,.2);font-size:14px}
+
+@media (max-width:980px){
+  .top-inner{flex-wrap:wrap;gap:6px 20px;padding:10px 16px 0}
+  .brand{order:1}.filearea{order:2}
+  .tabs{order:3;width:100%;overflow-x:auto}
+  .tabs button{padding:10px 12px}
+  main{padding:20px 16px 50px}
+  .split{grid-template-columns:1fr}
+}
+@media (max-width:720px){
+  .filechip{display:none}
+  .register thead{display:none}
+  .register table,.register tbody,.register tr,.register td{display:block;width:100%}
+  .register tr.case{padding:10px 4px;border-bottom:1px solid var(--line-soft)}
+  .register td{border:0;padding:3px 14px}
+  .register td[data-l]::before{content:attr(data-l) ": ";color:var(--muted);font-size:13px}
+  tbody tr.case.s-red{box-shadow:inset 3px 0 0 var(--red)}
+  tbody tr.case.s-amber{box-shadow:inset 3px 0 0 var(--amber-bar)}
+  tbody tr.case td:first-child{box-shadow:none!important}
+  .att{grid-template-columns:1fr}
+  .grid2,.facts{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:no-preference){
+  .drawer{animation:slidein .18s ease-out}
+  @keyframes slidein{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand"><h1>Aktindsigt &amp; Klager</h1><small>Version 4.2 (testudgave med Dropbox), udviklet af RH 🤓</small></div>
+    <nav class="tabs" aria-label="Hovedmenu">
+      <button data-view="akt">Aktindsigter <span class="n" id="cAkt">0</span></button>
+      <button data-view="klage">Klager <span class="n" id="cKlage">0</span></button>
+      <button data-view="stat">Statistik</button>
+      <button data-view="trash">Papirkurv <span class="n" id="cTrash">0</span></button>
+    </nav>
+    <div class="filearea">
+      <div class="filechip" id="fileChip" role="status" aria-live="polite"></div>
+      <button class="btn primary" data-action="save" title="Gem i Excel-filen (Ctrl+S)">Gem</button>
+      <details class="filemenu" id="fileMenu">
+        <summary class="btn">Fil ▾</summary>
+        <div class="menu">
+          <button data-action="open">Åbn Excel-fil…</button>
+          <button data-action="open-recent" id="recentBtn">Åbn senest brugte fil</button>
+          <button data-action="dbx-open" id="dbxOpenBtn">Åbn fra Dropbox…</button>
+          <hr>
+          <button data-action="saveas">Gem som ny fil…</button>
+          <button data-action="dbx-saveas" id="dbxSaveBtn">Gem i Dropbox som…</button>
+          <hr>
+          <button data-action="new">Start en tom fil</button>
+          <p id="fileNote"></p>
+        </div>
+      </details>
+      <input id="fileInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+    </div>
+  </div>
+</header>
+<main>
+  <div class="pagehead">
+    <div><h2 id="title"></h2><p id="subtitle"></p></div>
+    <button id="newBtn" class="btn primary" data-action="new-item"></button>
+  </div>
+  <div id="resume"></div>
+  <div id="figures"></div>
+  <div id="attention"></div>
+  <div id="controls" class="toolbar">
+    <input id="search" type="search" placeholder="Søg efter titel, myndighed, journalist eller sagsnummer" aria-label="Søg">
+    <select id="fStatus" aria-label="Filtrer på status"></select>
+    <select id="fMyn" aria-label="Filtrer på myndighed"></select>
+  </div>
+  <div id="content"></div>
+</main>
+
+<div id="scrim" class="scrim" hidden data-action="close-drawer"></div>
+<aside id="drawer" class="drawer" hidden aria-labelledby="dTitle" role="dialog"></aside>
+
+<div id="modal" class="modal" hidden>
+  <div class="modalbox" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modalhead"><h3 id="modalTitle"></h3><button type="button" class="xbtn" data-action="close" aria-label="Luk">×</button></div>
+    <div id="modalBody" class="modalbody"></div>
+  </div>
+</div>
+<datalist id="dlMyn"></datalist>
+<datalist id="dlJour"></datalist>
+<script>
+'use strict';
+/* =====================================================================
+   Konstanter
+   ===================================================================== */
+const VERSION = '4.2';
+const LOVFRIST = 7; // arbejdsdage, offentlighedslovens § 36
+const LS_KEY = 'aktindsigt_klager_v4_test';
+// Dropbox: indsæt app-nøglen (App key) fra Dropbox App Console. Tom = Dropbox er slået fra.
+const DROPBOX_APP_KEY = '';
+const AKT_STATUS = ['Under behandling', 'Afgjort'];
+const AKT_AFG = ['Afventer', 'Fuld aktindsigt', 'Delvis aktindsigt', 'Afslag', 'Henlagt'];
+const KL_INSTANS = ['Ankestyrelsen', 'Folketingets Ombudsmand', 'Datatilsynet', 'Nævnenes Hus', 'Anden'];
+const KL_STATUS = ['Under behandling', 'Hjemvist til genbehandling', 'Afgjort'];
+const KL_RES = ['Afventer', 'Medhold (Omgjort)', 'Delvis medhold', 'Hjemvist', 'Ikke medhold (Stadfæstet)', 'Afvist', 'Henvist til anden klageinstans'];
+const KL_WIN = ['Medhold (Omgjort)', 'Delvis medhold', 'Hjemvist'];
+const EV_TYPES = ['Sendt rykker', 'Modtaget fristudsættelse', 'Klage sendt', 'Hjemvist', 'Genbehandling', 'Modtaget svar', 'Notat'];
+
+/* =====================================================================
+   Datoer og arbejdsdage (alt regnes i lokal tid som 'åååå-mm-dd')
+   ===================================================================== */
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toDate = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d, 12); };
+const today = () => ymd(new Date());
+const isYmd = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+const fmt = s => isYmd(s) ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : '';
+
+function easter(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4,
+    f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30,
+    i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+    mo = Math.floor((h + l - 7 * m + 114) / 31), da = (h + l - 7 * m + 114) % 31 + 1;
+  return new Date(y, mo - 1, da, 12);
+}
+const holidayCache = {};
+function holidays(y) {
+  if (holidayCache[y]) return holidayCache[y];
+  const e = easter(y);
+  // Helligdage + dage hvor myndighederne holder lukket (grundlovsdag, juleaften, nytårsaften)
+  const set = new Set([`${y}-01-01`, `${y}-06-05`, `${y}-12-24`, `${y}-12-25`, `${y}-12-26`, `${y}-12-31`]);
+  const offsets = [-3, -2, 1, 39, 49, 50]; // skærtorsdag, langfredag, 2. påskedag, Kr. himmelfart, pinsedag, 2. pinsedag
+  if (y <= 2023) offsets.push(26); // store bededag (afskaffet fra 2024)
+  offsets.forEach(o => { const z = new Date(e); z.setDate(z.getDate() + o); set.add(ymd(z)); });
+  return (holidayCache[y] = set);
+}
+function isWorkday(s) { const d = toDate(s), wd = d.getDay(); return wd !== 0 && wd !== 6 && !holidays(d.getFullYear()).has(s); }
+function addWorkdays(start, n) {
+  if (!isYmd(start)) return '';
+  const d = toDate(start); let c = 0;
+  while (c < n) { d.setDate(d.getDate() + 1); if (isWorkday(ymd(d))) c++; }
+  return ymd(d);
+}
+/* Antal arbejdsdage fra 'from' til 'to' (positivt hvis to er senere) */
+function workdiff(from, to) {
+  if (!isYmd(from) || !isYmd(to)) return null;
+  const a = toDate(from), b = toDate(to), sign = a <= b ? 1 : -1, d = new Date(a); let c = 0;
+  while (ymd(d) !== to) { d.setDate(d.getDate() + sign); if (isWorkday(ymd(d))) c += sign; }
+  return c;
+}
+const dage = n => `${n} arbejdsdag${Math.abs(n) === 1 ? '' : 'e'}`;
+
+/* =====================================================================
+   Tilstand
+   ===================================================================== */
+let S = emptyState();
+let view = 'akt';
+let fileHandle = null, fileName = '', fileModified = 0, dirty = false, oldFormat = false, handlePending = false, lastName = '', backupAt = 0;
+
+function emptyState() { return { akt: [], klager: [], events: [], trash: [] }; }
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const esc = (s = '') => String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+const $ = id => document.getElementById(id);
+
+function saveLocal() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ S, fileName, dirty, oldFormat, savedAt: new Date().toISOString() })); }
+  catch (e) { console.warn('Kunne ikke gemme sikkerhedskopi', e); }
+}
+function changed() { dirty = true; saveLocal(); render(); }
+
+/* Afledte værdier */
+const origFrist = a => addWorkdays(a.dato, LOVFRIST);
+const gaeldendeFrist = a => a.frist || origFrist(a);
+const aktById = id => S.akt.find(a => a.id === id);
+const klagerFor = id => S.klager.filter(k => k.aktId === id);
+const eventsFor = (id) => S.events.filter(e => e.sagId === id).sort((a, b) => (a.dato || '').localeCompare(b.dato || ''));
+
+/* Hvor mange arbejdsdage er en frist overskredet (svar for sent, eller stadig åben efter fristen) */
+function overskridelse(a, frist) {
+  if (!isYmd(frist)) return 0;
+  const end = a.svardato || (a.status === 'Afgjort' ? '' : today());
+  if (!end) return 0;
+  const n = workdiff(frist, end);
+  return n > 0 ? n : 0;
+}
+function aktFristInfo(a) {
+  const dl = gaeldendeFrist(a);
+  if (!dl) return { txt: 'Ingen frist', cls: 'grey' };
+  if (a.svardato) {
+    const n = workdiff(dl, a.svardato);
+    return n > 0 ? { txt: `Besvaret ${dage(n)} for sent`, cls: 'red' } : { txt: 'Besvaret inden for fristen', cls: 'green' };
+  }
+  if (a.status === 'Afgjort') return { txt: 'Afgjort (svardato mangler)', cls: 'grey' };
+  const n = workdiff(today(), dl);
+  if (n < 0) return { txt: `Overskredet med ${dage(-n)}`, cls: 'red', over: true };
+  if (n === 0) return { txt: 'Frist i dag', cls: 'amber', soon: true };
+  if (n <= 2) return { txt: `${dage(n)} tilbage`, cls: 'amber', soon: true };
+  return { txt: `${dage(n)} tilbage`, cls: 'green' };
+}
+function klageInfo(k) {
+  if (k.status === 'Afgjort') return { txt: 'Afgjort', cls: 'grey' };
+  const t = today();
+  if (k.status === 'Hjemvist til genbehandling' && isYmd(k.genbehandlingFrist)) {
+    const n = workdiff(t, k.genbehandlingFrist);
+    if (n < 0) return { txt: `Genbehandlingsfrist overskredet med ${dage(-n)}`, cls: 'red', over: true };
+    return { txt: `Genbehandling: ${dage(n)} tilbage`, cls: n <= 2 ? 'amber' : 'blue', soon: n <= 2 };
+  }
+  if (isYmd(k.frist)) {
+    const n = workdiff(t, k.frist);
+    if (n < 0) return { txt: `Forventet afgørelse overskredet med ${dage(-n)}`, cls: 'red', over: true };
+    return { txt: `Forventet afgørelse om ${dage(n)}`, cls: 'blue' };
+  }
+  return { txt: 'Ingen forventet afgørelsesdato', cls: 'grey' };
+}
+
+/* =====================================================================
+   Visning
+   ===================================================================== */
+const VIEWS = {
+  akt: ['Aktindsigter', 'Dine anmodninger, frister og afgørelser', '+ Ny aktindsigt'],
+  klage: ['Klager', 'Klager over afslag, hjemvisninger og resultater', '+ Ny klage'],
+  stat: ['Statistik', 'Hvilke myndigheder overholder lovfristen, og hvilke gør ikke?', ''],
+  trash: ['Papirkurv', 'Slettede sager kan gendannes eller slettes permanent', '']
+};
+let drawerId = null;
+
+function render() {
+  document.querySelectorAll('.tabs button').forEach(b => b.dataset.view === view ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
+  $('cAkt').textContent = S.akt.length; $('cKlage').textContent = S.klager.length; $('cTrash').textContent = S.trash.length;
+  const [t, st, nb] = VIEWS[view];
+  $('title').textContent = t; $('subtitle').textContent = st;
+  $('newBtn').textContent = nb; $('newBtn').hidden = !nb;
+  $('controls').hidden = !['akt', 'klage'].includes(view);
+  renderFile(); renderResume(); renderFigures(); renderAttention(); renderFilters(); renderDatalists();
+  if (view === 'akt') renderAkt();
+  else if (view === 'klage') renderKlage();
+  else if (view === 'stat') renderStat();
+  else renderTrash();
+  if (drawerId) renderDrawer();
+}
+
+function renderFile() {
+  let state, cls;
+  if (!fileName) { cls = dirty ? 'dirty' : 'none'; state = dirty ? 'Ikke gemt i en fil' : 'Ingen fil åben'; }
+  else if (handlePending || dbxPending) { cls = dirty ? 'dirty' : 'none'; state = dirty ? 'Ikke gemt, filen er ikke hentet' : 'Filen er ikke hentet endnu'; }
+  else if (dirty) { cls = 'dirty'; state = dbx ? 'Ikke gemt i Dropbox' : 'Ikke gemt'; }
+  else { cls = 'saved'; state = oldFormat ? 'Gammelt format, gem for at konvertere' : dbx ? 'Alt er gemt i Dropbox' : 'Alt er gemt'; }
+  if (oldFormat && dirty) state = 'Ikke gemt, gammelt format';
+  $('fileChip').innerHTML = `<span class="name" title="${esc(fileName)}">${esc(fileName || 'Ingen Excel-fil')}</span><span class="state ${cls}"><span class="dot"></span>${esc(state)}</span>`
+
+  $('fileNote').textContent = dbx ? '“Gem” gemmer filen i Dropbox.' : canFS ? '“Gem” skriver direkte i den åbne Excel-fil.' : 'Din browser kan ikke skrive direkte i filen. “Gem” henter en ny kopi til Overførsler.';
+}
+
+function renderResume() {
+  const rb = $('recentBtn');
+  rb.disabled = !canFS || !lastName;
+  rb.textContent = lastName ? 'Åbn senest brugte fil (' + lastName + ')' : 'Åbn senest brugte fil';
+  rb.title = !canFS ? 'Kræver Chrome eller Edge' : !lastName ? 'Du har ikke åbnet en fil i appen endnu' : '';
+  for (const id of ['dbxOpenBtn', 'dbxSaveBtn']) { $(id).hidden = !DROPBOX_APP_KEY; $(id).disabled = !dbxReady(); $(id).title = dbxReady() ? '' : 'Dropbox virker kun, når appen åbnes fra sin webadresse'; }
+  if (dbxPending && dbx) {
+    $('resume').innerHTML = `<div class="resume"><div><b>${esc(dbx.name)} kunne ikke hentes fra Dropbox</b><div class="meta">${dirty ? 'Dine ændringer, som ikke er gemt, er bevaret.' : 'Det, du ser nu, er browserens kopi.'} Tjek internetforbindelsen, og prøv igen.</div></div><button class="btn primary" data-action="dbx-reload">Prøv igen</button></div>`;
+    return;
+  }
+  if (!handlePending) { $('resume').innerHTML = ''; return; }
+  const txt = dirty
+    ? 'Du har ændringer fra sidst, som ikke er gemt. De bliver bevaret, og du kan gemme dem i filen bagefter.'
+    : (S.akt.length || S.klager.length) ? 'Det, du ser nu, er browserens kopi. Hent filen for at få den nyeste version, fx hvis den er ændret på en anden computer.' : 'Det er den fil, du brugte sidst. Klik for at hente den.';
+  $('resume').innerHTML = `<div class="resume"><div><b>Fortsæt med ${esc(lastName)}</b><div class="meta">${txt}</div></div><button class="btn primary" data-action="reconnect">${dirty ? 'Forbind til filen' : 'Hent filen'}</button></div>`;
+}
+
+function renderFigures() {
+  let data = [];
+  if (view === 'akt') {
+    const active = S.akt.filter(a => a.status !== 'Afgjort');
+    const over = active.filter(a => aktFristInfo(a).over).length, soon = active.filter(a => aktFristInfo(a).soon).length;
+    const done = S.akt.filter(a => a.medhold && a.medhold !== 'Afventer');
+    const full = done.length ? Math.round(done.filter(a => a.medhold === 'Fuld aktindsigt').length / done.length * 100) : 0;
+    data = [[active.length, 'under behandling'], [over, 'over fristen', over ? 'alert' : ''], [soon, 'frist inden for 2 dage', soon ? 'warn' : ''], [full + ' %', 'fik fuld aktindsigt'], [S.akt.filter(a => a.medhold === 'Afslag').length, 'afslag']];
+  } else if (view === 'klage') {
+    const vers = S.klager.filter(k => k.status !== 'Afgjort'), kdone = S.klager.filter(k => k.resultat && k.resultat !== 'Afventer');
+    const win = kdone.length ? Math.round(kdone.filter(k => KL_WIN.includes(k.resultat)).length / kdone.length * 100) : 0;
+    const over = vers.filter(k => klageInfo(k).over).length;
+    data = [[vers.length, 'verserende'], [over, 'over forventet afgørelse', over ? 'alert' : ''], [kdone.length, 'afgjort'], [win + ' %', 'medhold eller hjemvisning'], [S.klager.filter(k => k.resultat === 'Hjemvist').length, 'hjemvist']];
+  }
+  $('figures').innerHTML = data.length ? `<div class="figures">${data.map(([v, l, c]) => `<div class="fig ${c || ''}"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}</div>` : '';
+}
+
+function renderAttention() {
+  if (view !== 'akt' && view !== 'klage') { $('attention').innerHTML = ''; return; }
+  const items = [];
+  S.akt.filter(a => a.status !== 'Afgjort').forEach(a => { const fi = aktFristInfo(a); if (fi.over || fi.soon) items.push({ id: a.id, t: a.emne || 'Uden titel', m: `${a.myndighed || 'Ukendt myndighed'}, frist ${fmt(gaeldendeFrist(a))}`, fi, rykker: true }); });
+  S.klager.filter(k => k.status !== 'Afgjort').forEach(k => { const ki = klageInfo(k); if (ki.over || ki.soon) items.push({ id: k.id, t: 'Klage: ' + (aktById(k.aktId)?.emne || k.sagsnr || 'uden titel'), m: k.instans, fi: ki, rykker: true }); });
+  const unlinked = S.klager.filter(k => !aktById(k.aktId));
+  unlinked.forEach(k => items.push({ id: k.id, t: 'Klage ' + (k.sagsnr || '') + ' er ikke koblet til en aktindsigt', m: k._emne ? `I filen stod der “${k._emne}”` : '', fi: { txt: 'Vælg aktindsigt', cls: 'amber' }, fix: true }));
+  if (!items.length) {
+    $('attention').innerHTML = (S.akt.length || S.klager.length) ? `<p class="calm"><span class="dot" style="background:var(--green-bar)"></span>Ingen frister kræver handling lige nu.</p>` : '';
+    return;
+  }
+  items.sort((a, b) => (b.fi.cls === 'red') - (a.fi.cls === 'red'));
+  $('attention').innerHTML = `<section class="attention" aria-labelledby="attH"><h3 id="attH">Kræver handling</h3>
+    ${items.map(i => `<div class="att"><div><div class="t">${esc(i.t)}</div>${i.m ? `<div class="m">${esc(i.m)}</div>` : ''}</div>
+      <div class="c-${i.fi.cls}"><span class="flabel">${esc(i.fi.txt)}</span></div>
+      <div class="formbtns">${i.fix ? `<button class="btn sm" data-action="edit-klage" data-id="${i.id}">Kobl klagen</button>` : `<button class="btn sm" data-action="quick-rykker" data-id="${i.id}">Registrér rykker</button><button class="btn sm" data-action="open-case" data-id="${i.id}">Åbn sag</button>`}</div></div>`).join('')}
+  </section>`;
+}
+
+function renderFilters() {
+  const fs = $('fStatus'), fm = $('fMyn'), cs = fs.value, cm = fm.value;
+  const o = view === 'klage'
+    ? ['Under behandling', 'Hjemvist til genbehandling', 'Afgjort', 'Over forventet afgørelse', 'Ikke koblet']
+    : ['Under behandling', 'Afgjort', 'Over fristen', 'Frist inden for 2 dage'];
+  fs.innerHTML = '<option value="">Alle statusser</option>' + o.map(x => `<option${x === cs ? ' selected' : ''}>${esc(x)}</option>`).join('');
+  const list = view === 'klage' ? [...new Set(S.klager.map(k => k.instans).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'da')) : myndigheder();
+  fm.innerHTML = `<option value="">${view === 'klage' ? 'Alle klageinstanser' : 'Alle myndigheder'}</option>` + list.map(x => `<option${x === cm ? ' selected' : ''}>${esc(x)}</option>`).join('');
+}
+const myndigheder = () => [...new Set(S.akt.map(a => (a.myndighed || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'da'));
+function renderDatalists() {
+  $('dlMyn').innerHTML = myndigheder().map(m => `<option value="${esc(m)}">`).join('');
+  $('dlJour').innerHTML = [...new Set(S.akt.map(a => (a.journalist || '').trim()).filter(Boolean))].map(m => `<option value="${esc(m)}">`).join('');
+}
+const q = () => $('search').value.trim().toLowerCase();
+const hit = fields => { const s = q(); return !s || fields.some(f => String(f || '').toLowerCase().includes(s)); };
+
+/* Fristbjælke: hvor stor en del af fristen er brugt */
+function fristCell(a) {
+  const fi = aktFristInfo(a), dl = gaeldendeFrist(a);
+  if (!dl) return `<div class="frist c-grey"><span class="flabel">Ingen frist</span></div>`;
+  const total = Math.max(1, workdiff(a.dato, dl) || 1);
+  const end = a.svardato || (a.status === 'Afgjort' ? '' : today());
+  const used = end ? workdiff(a.dato, end) : total;
+  const pct = Math.max(4, Math.min(100, used / total * 100));
+  return `<div class="frist c-${fi.cls}"><span class="date">${fmt(dl)}</span>${a.frist ? ' <span class="small muted">forlænget</span>' : ''}
+    <div class="track" aria-hidden="true"><span style="width:${pct}%"></span></div><span class="flabel">${esc(fi.txt)}</span></div>`;
+}
+function verdict(v) {
+  const cls = { 'Fuld aktindsigt': 'v-good', 'Medhold (Omgjort)': 'v-good', 'Delvis aktindsigt': 'v-mid', 'Delvis medhold': 'v-mid', 'Hjemvist': 'v-mid', 'Afslag': 'v-bad', 'Ikke medhold (Stadfæstet)': 'v-bad', 'Afvist': 'v-bad' }[v] || 'v-none';
+  return `<span class="verdict ${cls}"><span class="dot"></span>${esc(v || 'Afventer')}</span>`;
+}
+
+function renderAkt() {
+  const fs = $('fStatus').value, fm = $('fMyn').value;
+  if (!S.akt.length) {
+    $('content').innerHTML = `<div class="register empty"><p>Der er ingen aktindsigter endnu.</p><div class="formbtns" style="justify-content:center"><button class="btn primary" data-action="new-item">+ Ny aktindsigt</button><button class="btn" data-action="open">Åbn Excel-fil…</button></div></div>`;
+    return;
+  }
+  const rows = S.akt.filter(a => {
+    const fi = aktFristInfo(a);
+    if (fs === 'Over fristen' && !fi.over) return false;
+    if (fs === 'Frist inden for 2 dage' && !fi.soon) return false;
+    if (AKT_STATUS.includes(fs) && a.status !== fs) return false;
+    if (fm && (a.myndighed || '').trim() !== fm) return false;
+    return hit([a.emne, a.myndighed, a.journalist, a.sagsnr, a.bemaerkning, a.medhold, ...klagerFor(a.id).map(k => k.sagsnr)]);
+  }).sort((a, b) => (b.dato || '').localeCompare(a.dato || ''));
+  let html = '', year = null;
+  rows.forEach(a => {
+    const y = (a.dato || '').slice(0, 4) || 'Uden dato';
+    if (y !== year) { year = y; const n = rows.filter(r => ((r.dato || '').slice(0, 4) || 'Uden dato') === y).length; html += `<tr class="year"><td colspan="5">${esc(y)}<span>${n} sag${n === 1 ? '' : 'er'}</span></td></tr>`; }
+    const fi = aktFristInfo(a), kl = klagerFor(a.id);
+    const meta = [a.myndighed, a.sagsnr ? 'sagsnr. ' + a.sagsnr : '', a.journalist].filter(Boolean).map(esc).join(', ');
+    html += `<tr class="case s-${fi.cls}" data-open="${a.id}">
+      <td><button class="ctitle" data-action="open-case" data-id="${a.id}">${esc(a.emne || 'Uden titel')}</button><div class="meta">${meta}</div>
+        ${kl.map(k => `<span class="tag">Klaget, ${esc(k.status.toLowerCase())}</span>`).join(' ')}</td>
+      <td class="date" data-l="Anmodet">${fmt(a.dato)}</td>
+      <td data-l="Frist">${fristCell(a)}</td>
+      <td class="date" data-l="Svar">${a.svardato ? fmt(a.svardato) : '<span class="muted">Afventer</span>'}</td>
+      <td data-l="Afgørelse">${verdict(a.medhold)}</td></tr>`;
+  });
+  $('content').innerHTML = `<div class="register"><table><thead><tr><th>Sag</th><th>Anmodet</th><th>Svarfrist</th><th>Svar modtaget</th><th>Afgørelse</th></tr></thead>
+    <tbody>${html || '<tr><td colspan="5" class="empty">Ingen sager passer på søgningen.</td></tr>'}</tbody></table></div>`;
+}
+
+function renderKlage() {
+  const fs = $('fStatus').value, fm = $('fMyn').value;
+  if (!S.klager.length) { $('content').innerHTML = `<div class="register empty"><p>Der er ingen klager endnu. Du kan oprette en klage fra en aktindsigt.</p></div>`; return; }
+  const rows = S.klager.filter(k => {
+    const a = aktById(k.aktId);
+    if (fs === 'Over forventet afgørelse' && !klageInfo(k).over) return false;
+    if (fs === 'Ikke koblet' && a) return false;
+    if (KL_STATUS.includes(fs) && k.status !== fs) return false;
+    if (fm && k.instans !== fm) return false;
+    return hit([k.sagsnr, k.instans, k.resultat, k.bemaerkning, a?.emne, a?.myndighed, a?.sagsnr]);
+  }).sort((a, b) => (b.dato || '').localeCompare(a.dato || ''));
+  $('content').innerHTML = `<div class="register"><table><thead><tr><th>Klagen gælder</th><th>Klageinstans</th><th>Klaget</th><th>Forventet afgørelse</th><th>Resultat</th></tr></thead><tbody>
+    ${rows.map(k => {
+      const a = aktById(k.aktId), ki = klageInfo(k);
+      return `<tr class="case s-${ki.cls}" data-open="${k.id}">
+        <td><button class="ctitle" data-action="open-case" data-id="${k.id}">${esc(a ? a.emne : 'Ikke koblet til en aktindsigt')}</button>
+          <div class="meta">${[a?.myndighed, k.sagsnr ? 'klagesag ' + k.sagsnr : ''].filter(Boolean).map(esc).join(', ')}</div>
+          ${a ? '' : '<span class="tag warn">Vælg aktindsigt</span>'}</td>
+        <td data-l="Instans">${esc(k.instans)}</td>
+        <td class="date" data-l="Klaget">${fmt(k.dato)}</td>
+        <td data-l="Forventet"><div class="frist c-${ki.cls}"><span class="date">${fmt(k.status === 'Hjemvist til genbehandling' && k.genbehandlingFrist ? k.genbehandlingFrist : k.frist) || '<span class="muted">Ikke oplyst</span>'}</span><div><span class="flabel">${esc(ki.txt)}</span></div></div></td>
+        <td data-l="Resultat">${verdict(k.resultat)}<div class="meta">${esc(k.status)}</div></td></tr>`;
+    }).join('') || '<tr><td colspan="5" class="empty">Ingen klager passer på søgningen.</td></tr>'}
+  </tbody></table></div>`;
+}
+
+function renderStat() {
+  const by = {};
+  S.akt.forEach(a => {
+    const n = (a.myndighed || '').trim() || 'Ukendt';
+    const v = by[n] ??= { navn: n, sager: 0, besvaret: 0, svartid: 0, overLov: 0, overGld: 0, dageOver: 0, ext: 0, rem: 0, kl: 0, klAfg: 0, klWin: 0, klVers: 0 };
+    v.sager++;
+    klagerFor(a.id).forEach(k => { v.kl++; if (k.resultat && k.resultat !== 'Afventer') { v.klAfg++; if (KL_WIN.includes(k.resultat)) v.klWin++; } if (k.status !== 'Afgjort') v.klVers++; });
+    if (a.svardato && a.dato) { v.besvaret++; v.svartid += Math.max(0, workdiff(a.dato, a.svardato)); }
+    const ol = overskridelse(a, origFrist(a)); if (ol > 0) { v.overLov++; v.dageOver += ol; }
+    if (overskridelse(a, gaeldendeFrist(a)) > 0) v.overGld++;
+    S.events.filter(e => e.sagId === a.id).forEach(e => { if (e.type === 'Sendt rykker') v.rem++; if (e.type === 'Modtaget fristudsættelse') v.ext++; });
+  });
+  const dec = x => x.toFixed(1).replace('.', ',');
+  const rows = Object.values(by).map(v => ({ ...v, andel: v.sager ? Math.round(v.overLov / v.sager * 100) : 0 })).sort((a, b) => b.andel - a.andel || b.overLov - a.overLov || b.sager - a.sager);
+  const tot = S.akt.length, overLov = S.akt.filter(a => overskridelse(a, origFrist(a)) > 0).length, overGld = S.akt.filter(a => overskridelse(a, gaeldendeFrist(a)) > 0).length;
+  const besv = S.akt.filter(a => a.svardato && a.dato), gns = besv.length ? dec(besv.reduce((s, a) => s + Math.max(0, workdiff(a.dato, a.svardato)), 0) / besv.length) : '–';
+  const afg = AKT_AFG.map(x => [x, S.akt.filter(a => (a.medhold || 'Afventer') === x).length]), max = Math.max(1, ...afg.map(x => x[1]));
+  $('content').innerHTML = `
+  <div class="figures"><div class="fig"><div class="v">${tot}</div><div class="l">sager i alt</div></div>
+    <div class="fig"><div class="v">${gns}</div><div class="l">arbejdsdage i gennemsnitlig svartid</div></div>
+    <div class="fig ${overLov ? 'alert' : ''}"><div class="v">${overLov}</div><div class="l">over lovfristen på 7 dage</div></div>
+    <div class="fig"><div class="v">${overGld}</div><div class="l">over den gældende frist</div></div>
+    <div class="fig"><div class="v">${S.events.filter(e => e.type === 'Modtaget fristudsættelse').length}</div><div class="l">fristudsættelser</div></div></div>
+  <p class="explain">“Over lovfristen” betyder, at svaret kom mere end 7 arbejdsdage efter anmodningen, eller at sagen stadig er åben efter de 7 dage. “Over den gældende frist” regnes fra den frist, myndigheden selv har sat ved en fristudsættelse. Weekender og helligdage tæller ikke med. “Klagemedhold” viser, hvor mange af de afgjorte klager der gav helt eller delvist medhold eller en hjemvisning.</p>
+  <div class="split">
+    <div class="register"><table><thead><tr><th>Myndighed</th><th>Sager</th><th>Gns. svartid</th><th>Over lovfristen</th><th>Gns. over</th><th>Over gældende frist</th><th>Udsæt.</th><th>Rykkere</th><th>Klager</th><th>Klagemedhold</th></tr></thead><tbody>
+    ${rows.map(v => `<tr><td style="white-space:nowrap"><b>${esc(v.navn)}</b></td><td>${v.sager}</td><td class="date">${v.besvaret ? dec(v.svartid / v.besvaret) + ' dage' : '–'}</td>
+      <td><div class="stat-bar"><div class="b"><span style="width:${v.andel}%"></span></div><span class="small">${v.overLov} af ${v.sager} (${v.andel} %)</span></div></td>
+      <td class="date">${v.overLov ? dec(v.dageOver / v.overLov) + ' dage' : '–'}</td><td>${v.overGld}</td><td>${v.ext}</td><td>${v.rem}</td><td class="date">${v.kl}${v.klVers ? ` <span class="small muted">(${v.klVers} åbne)</span>` : ''}</td><td class="date">${v.klAfg ? `${v.klWin} af ${v.klAfg}` : '–'}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">Ingen data endnu.</td></tr>'}
+    </tbody></table></div>
+    <div class="panel"><h3>Afgørelser</h3><div class="dist">${afg.map(([n, c]) => `<span>${esc(n)}</span><b>${c}</b><div class="b"><span style="width:${c / max * 100}%"></span></div>`).join('')}</div></div>
+  </div>`;
+}
+
+function renderTrash() {
+  if (!S.trash.length) { $('content').innerHTML = '<div class="register empty"><p>Papirkurven er tom.</p></div>'; return; }
+  $('content').innerHTML = `<div class="formbtns" style="justify-content:flex-end;margin-bottom:12px"><button class="btn danger" data-action="empty-trash">Tøm papirkurven</button></div>
+  <div class="register"><table><thead><tr><th>Sag</th><th>Slettet</th><th></th></tr></thead><tbody>
+  ${S.trash.slice().sort((a, b) => (b.slettet || '').localeCompare(a.slettet || '')).map(t => {
+    const d = t.data || {}, extra = [t.type === 'akt' ? 'Aktindsigt' : 'Klage'];
+    if (t.type === 'akt' && d.klager?.length) extra.push(`med ${d.klager.length} klage${d.klager.length === 1 ? '' : 'r'}`);
+    if (d.events?.length) extra.push(`${d.events.length} hændelse${d.events.length === 1 ? '' : 'r'}`);
+    return `<tr><td><span class="ctitle" style="cursor:default">${esc(t.titel || 'Uden titel')}</span><div class="meta">${extra.join(', ')}</div></td><td class="date">${fmt((t.slettet || '').slice(0, 10))}</td>
+    <td><div class="formbtns" style="justify-content:flex-end"><button class="btn sm" data-action="restore" data-id="${t.id}">Gendan</button><button class="btn sm danger" data-action="destroy" data-id="${t.id}">Slet permanent</button></div></td></tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+/* =====================================================================
+   Modal og formularer
+   ===================================================================== */
+let lastFocus = null;
+function openModal(title, html) {
+  lastFocus = document.activeElement;
+  $('modalTitle').textContent = title; $('modalBody').innerHTML = html; $('modal').hidden = false;
+  const f = $('modalBody').querySelector('input:not([type=hidden]):not([disabled]),select,textarea,button'); if (f) f.focus();
+}
+function closeModal() { $('modal').hidden = true; $('modalBody').innerHTML = ''; if (lastFocus) lastFocus.focus(); }
+const opts = (list, cur) => { const l = cur && !list.includes(cur) ? [...list, cur] : list; return l.map(v => `<option${v === cur ? ' selected' : ''}>${esc(v)}</option>`).join(''); };
+const formData = f => Object.fromEntries([...new FormData(f)].map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]));
+
+function aktForm(a = {}) {
+  const isNew = !a.id;
+  const lastJ = S.akt.length ? S.akt.slice().sort((x, y) => (y.dato || '').localeCompare(x.dato || ''))[0].journalist || '' : '';
+  const d = a.dato || today();
+  openModal(isNew ? 'Ny aktindsigt' : 'Rediger aktindsigt', `<form id="f" class="grid2" novalidate>
+    <div class="full"><label for="emne">Titel / emne *</label><input id="emne" name="emne" required value="${esc(a.emne)}"></div>
+    <div><label for="myn">Myndighed *</label><input id="myn" name="myndighed" list="dlMyn" required value="${esc(a.myndighed)}" autocomplete="off"></div>
+    <div><label for="jour">Journalist</label><input id="jour" name="journalist" list="dlJour" value="${esc(isNew ? lastJ : a.journalist)}" autocomplete="off"></div>
+    <div><label for="sagsnr">Sagsnummer</label><input id="sagsnr" name="sagsnr" value="${esc(a.sagsnr)}"></div>
+    <div><label for="dato">Anmodningsdato *</label><input id="dato" type="date" name="dato" required value="${d}"></div>
+    <div><label>Lovfrist (7 arbejdsdage)</label><input id="orig" type="date" disabled value="${addWorkdays(d, LOVFRIST)}"><div class="hint">Beregnes automatisk. Weekender og helligdage tæller ikke med.</div></div>
+    <div><label for="frist">Gældende svarfrist</label><input id="frist" type="date" name="frist" value="${a.frist || ''}"><div class="hint">Lad feltet stå tomt, hvis 7-dagesfristen gælder. Udfyldes automatisk ved en fristudsættelse.</div></div>
+    <div><label for="svardato">Faktisk svardato</label><input id="svardato" type="date" name="svardato" value="${a.svardato || ''}"><div class="hint">Datoen, hvor du modtog myndighedens svar eller afgørelse.</div></div>
+    <div><label for="status">Status</label><select id="status" name="status">${opts(AKT_STATUS, a.status || 'Under behandling')}</select></div>
+    <div><label for="medhold">Afgørelse</label><select id="medhold" name="medhold">${opts(AKT_AFG, a.medhold || 'Afventer')}</select></div>
+    <div class="full"><label for="bem">Bemærkninger</label><textarea id="bem" name="bemaerkning">${esc(a.bemaerkning)}</textarea></div>
+    <div class="full err" id="ferr" role="alert"></div>
+    <div class="full formbtns"><button class="btn primary">Gem aktindsigt</button><button type="button" class="btn" data-action="close">Annuller</button>
+      ${isNew ? '' : `<button type="button" class="btn danger right" data-action="trash-akt" data-id="${a.id}">Flyt til papirkurv</button>`}</div>
+  </form>`);
+  const f = $('f');
+  f.dato.addEventListener('change', () => { $('orig').value = addWorkdays(f.dato.value, LOVFRIST); });
+  f.svardato.addEventListener('change', () => { if (f.svardato.value && f.status.value === 'Under behandling') f.status.value = 'Afgjort'; });
+  f.onsubmit = e => {
+    e.preventDefault();
+    const o = formData(f), err = [];
+    if (!o.emne) err.push('Titel / emne skal udfyldes.');
+    if (!o.myndighed) err.push('Myndighed skal udfyldes.');
+    if (!isYmd(o.dato)) err.push('Anmodningsdato skal udfyldes.');
+    if (o.svardato && o.dato && o.svardato < o.dato) err.push('Svardatoen ligger før anmodningsdatoen.');
+    if (o.frist && o.dato && o.frist < o.dato) err.push('Svarfristen ligger før anmodningsdatoen.');
+    if (err.length) { $('ferr').textContent = err.join(' '); return; }
+    if (isNew) S.akt.push({ id: uid(), ...o });
+    else Object.assign(aktById(a.id), o);
+    closeModal(); changed(); toast(isNew ? 'Aktindsigten er oprettet' : 'Ændringerne er gemt i appen');
+  };
+}
+
+function klageForm(k = {}, aktId = '') {
+  const isNew = !k.id;
+  if (!S.akt.length) { toast('Opret først en aktindsigt, som klagen kan kobles til.'); return; }
+  const sel = k.aktId || aktId;
+  const akts = S.akt.slice().sort((a, b) => (b.dato || '').localeCompare(a.dato || ''));
+  openModal(isNew ? 'Ny klage' : 'Rediger klage', `<form id="f" class="grid2" novalidate>
+    <div class="full"><label for="akt">Aktindsigt *</label><select id="akt" name="aktId" required><option value="">Vælg aktindsigt…</option>${akts.map(a => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.emne || 'Uden titel')} · ${esc(a.myndighed)}${a.sagsnr ? ' · ' + esc(a.sagsnr) : ''}</option>`).join('')}</select>
+      ${!isNew && !aktById(k.aktId) ? `<div class="hint">Klagen er ikke koblet${k._emne ? ` (i filen stod der: “${esc(k._emne)}”)` : ''}. Vælg den rigtige aktindsigt.</div>` : ''}</div>
+    <div><label for="ksag">Klagesagsnummer</label><input id="ksag" name="sagsnr" value="${esc(k.sagsnr)}"></div>
+    <div><label for="inst">Klageinstans</label><select id="inst" name="instans">${opts(KL_INSTANS, k.instans || 'Ankestyrelsen')}</select></div>
+    <div><label for="kdato">Klagedato *</label><input id="kdato" type="date" name="dato" required value="${k.dato || today()}"></div>
+    <div><label for="kfrist">Forventet afgørelse</label><input id="kfrist" type="date" name="frist" value="${k.frist || ''}"></div>
+    <div><label for="kstat">Status</label><select id="kstat" name="status">${opts(KL_STATUS, k.status || 'Under behandling')}</select></div>
+    <div><label for="kres">Resultat</label><select id="kres" name="resultat">${opts(KL_RES, k.resultat || 'Afventer')}</select></div>
+    <div id="genWrap"><label for="kgen">Genbehandlingsfrist</label><input id="kgen" type="date" name="genbehandlingFrist" value="${k.genbehandlingFrist || ''}"></div>
+    <div class="full"><label for="kbem">Bemærkninger</label><textarea id="kbem" name="bemaerkning">${esc(k.bemaerkning)}</textarea></div>
+    <div class="full err" id="ferr" role="alert"></div>
+    <div class="full formbtns"><button class="btn primary">Gem klage</button><button type="button" class="btn" data-action="close">Annuller</button>
+      ${isNew ? '' : `<button type="button" class="btn danger right" data-action="trash-klage" data-id="${k.id}">Flyt til papirkurv</button>`}</div>
+  </form>`);
+  const f = $('f');
+  const toggle = () => { $('genWrap').hidden = !(f.resultat.value === 'Hjemvist' || f.status.value === 'Hjemvist til genbehandling' || f.genbehandlingFrist.value); };
+  f.resultat.addEventListener('change', () => { if (f.resultat.value === 'Hjemvist' && f.status.value === 'Under behandling') f.status.value = 'Hjemvist til genbehandling'; toggle(); });
+  f.status.addEventListener('change', toggle); toggle();
+  f.onsubmit = e => {
+    e.preventDefault();
+    const o = formData(f), err = [];
+    if (!o.aktId) err.push('Vælg den aktindsigt, klagen hører til.');
+    if (!isYmd(o.dato)) err.push('Klagedato skal udfyldes.');
+    if (err.length) { $('ferr').textContent = err.join(' '); return; }
+    if (isNew) S.klager.push({ id: uid(), ...o });
+    else { const t = S.klager.find(x => x.id === k.id); Object.assign(t, o); delete t._emne; }
+    closeModal(); changed(); toast(isNew ? 'Klagen er oprettet' : 'Ændringerne er gemt i appen');
+  };
+}
+
+function sagInfo(id) {
+  const a = aktById(id); if (a) return { type: 'Aktindsigt', titel: a.emne || 'Aktindsigt', obj: a };
+  const k = S.klager.find(x => x.id === id); if (k) return { type: 'Klage', titel: 'Klage ' + (k.sagsnr || '') + (aktById(k.aktId) ? ' · ' + aktById(k.aktId).emne : ''), obj: k };
+  return null;
+}
+function eventForm(sagId, evId = null) {
+  const e = evId ? S.events.find(x => x.id === evId) : {};
+  if (!e) return;
+  sagId = sagId || e.sagId;
+  const s = sagInfo(sagId); if (!s) return;
+  openModal((evId ? 'Rediger hændelse · ' : 'Ny hændelse · ') + s.titel, `<form id="f" class="grid2" novalidate>
+    <div><label for="etype">Hændelse</label><select id="etype" name="type">${opts(EV_TYPES, e.type || 'Sendt rykker')}</select></div>
+    <div><label for="edato">Dato *</label><input id="edato" type="date" name="dato" required value="${e.dato || today()}"></div>
+    <div id="nyWrap"><label for="eny">Ny frist</label><input id="eny" type="date" name="nyFrist" value="${e.nyFrist || ''}"><div class="hint">${s.type === 'Aktindsigt' ? 'Bliver sagens gældende svarfrist.' : 'Bliver klagens forventede afgørelsesdato.'}</div></div>
+    <div class="full"><label for="enote">Notat</label><textarea id="enote" name="note">${esc(e.note)}</textarea></div>
+    <div class="full err" id="ferr" role="alert"></div>
+    <div class="full formbtns"><button class="btn primary">Gem hændelse</button><button type="button" class="btn" data-action="close">Annuller</button>${evId ? `<button type="button" class="btn danger right" data-action="del-event" data-id="${evId}">Slet hændelse</button>` : ''}</div></form>`);
+  const f = $('f'); const tg = () => { $('nyWrap').hidden = !(f.type.value === 'Modtaget fristudsættelse' || f.nyFrist.value); };
+  f.type.addEventListener('change', tg); tg();
+  f.onsubmit = ev => {
+    ev.preventDefault();
+    const o = formData(f);
+    if (!isYmd(o.dato)) { $('ferr').textContent = 'Dato skal udfyldes.'; return; }
+    if (evId) Object.assign(e, o); else S.events.push({ id: uid(), sagId, sagType: s.type === 'Aktindsigt' ? 'akt' : 'klage', ...o });
+    if (o.type === 'Modtaget fristudsættelse' && o.nyFrist) s.obj.frist = o.nyFrist;
+    closeModal(); changed(); if (!drawerId) openDrawer(sagId);
+  };
+}
+
+/* =====================================================================
+   Sagspanel: alt om én sag samlet ét sted
+   ===================================================================== */
+function openDrawer(id) {
+  if (!sagInfo(id)) return toast('Sagen findes ikke længere.');
+  drawerId = id; $('drawer').hidden = false; $('scrim').hidden = false; renderDrawer();
+  const x = $('drawer').querySelector('.xbtn'); if (x) x.focus();
+}
+function closeDrawer() { drawerId = null; $('drawer').hidden = true; $('scrim').hidden = true; $('drawer').innerHTML = ''; }
+
+function flowFor(a) {
+  const ev = [];
+  const add = (dato, t, note = '', k = '', evId = '') => { if (isYmd(dato)) ev.push({ dato, t, note, k, evId }); };
+  add(a.dato, 'Anmodning sendt', a.myndighed);
+  add(origFrist(a), 'Lovfrist, 7 arbejdsdage', '', 'k-deadline');
+  if (a.frist && a.frist !== origFrist(a)) add(a.frist, 'Gældende svarfrist', '', 'k-deadline');
+  eventsFor(a.id).forEach(e => add(e.dato, e.type, [e.note, e.nyFrist ? 'Ny frist ' + fmt(e.nyFrist) : ''].filter(Boolean).join('\n'), 'k-event', e.id));
+  add(a.svardato, 'Svar modtaget', a.medhold && a.medhold !== 'Afventer' ? a.medhold : '', 'k-answer');
+  klagerFor(a.id).forEach(k => {
+    add(k.dato, 'Klage sendt til ' + (k.instans || 'klageinstans'), k.sagsnr ? 'Klagesag ' + k.sagsnr : '', 'k-klage');
+    eventsFor(k.id).forEach(e => add(e.dato, 'Klage: ' + e.type.toLowerCase(), [e.note, e.nyFrist ? 'Ny frist ' + fmt(e.nyFrist) : ''].filter(Boolean).join('\n'), 'k-klage', e.id));
+    if (k.status !== 'Afgjort') add(k.frist, 'Forventet klageafgørelse', '', 'k-deadline');
+    add(k.genbehandlingFrist, 'Frist for genbehandling', '', 'k-deadline');
+  });
+  return ev;
+}
+function flowHtml(ev) {
+  const t = today(); let html = '', shown = false;
+  ev.sort((x, y) => x.dato.localeCompare(y.dato)).forEach(e => {
+    if (!shown && e.dato > t) { html += `<li class="today"><div class="ft">I dag, ${fmt(t)}</div></li>`; shown = true; }
+    html += `<li class="${e.k}${e.dato > t ? ' future' : ''}"><div class="fd">${fmt(e.dato)}</div><div class="ft">${esc(e.t)}${e.evId ? ` <button class="linkbtn" data-action="edit-event" data-id="${e.evId}">Rediger</button>` : ''}</div>${e.note ? `<div class="fn">${esc(e.note)}</div>` : ''}</li>`;
+  });
+  return `<ol class="flow">${html}</ol>`;
+}
+const fact = (l, v) => `<div><dt>${l}</dt><dd>${v || '<span class="muted">–</span>'}</dd></div>`;
+
+function renderDrawer() {
+  const s = sagInfo(drawerId); if (!s) { closeDrawer(); return; }
+  let html;
+  if (s.type === 'Aktindsigt') {
+    const a = s.obj, fi = aktFristInfo(a), kl = klagerFor(a.id);
+    html = `<div class="dhead"><div class="kind"><span>Aktindsigt${a.sagsnr ? ', sagsnr. ' + esc(a.sagsnr) : ''}</span><button class="xbtn" data-action="close-drawer" aria-label="Luk">×</button></div>
+      <h3 id="dTitle">${esc(a.emne || 'Uden titel')}</h3><div class="muted">${esc(a.myndighed)}</div>
+      <div class="dactions"><button class="btn primary" data-action="edit-akt" data-id="${a.id}">Rediger</button><button class="btn" data-action="new-event" data-id="${a.id}">Tilføj hændelse</button>${kl.length ? '' : `<button class="btn" data-action="new-klage" data-id="${a.id}">Opret klage</button>`}</div></div>
+      <div class="dbody">
+        <div class="c-${fi.cls}" style="margin-bottom:18px">${fristCell(a)}</div>
+        <dl class="facts">${fact('Anmodet', fmt(a.dato))}${fact('Lovfrist', fmt(origFrist(a)))}${fact('Gældende svarfrist', a.frist ? fmt(a.frist) : 'Lovfristen')}${fact('Svar modtaget', fmt(a.svardato))}${fact('Status', esc(a.status))}${fact('Afgørelse', verdict(a.medhold))}${fact('Journalist', esc(a.journalist))}${fact('Sagsnummer', esc(a.sagsnr))}</dl>
+        ${a.bemaerkning ? `<div class="notes">${esc(a.bemaerkning)}</div>` : ''}
+        ${kl.map(k => { const ki = klageInfo(k); return `<div class="section-h">Klage<button class="btn sm" data-action="edit-klage" data-id="${k.id}">Rediger klage</button></div>
+          <div class="subcase"><div class="c-${ki.cls}"><span class="flabel">${esc(ki.txt)}</span></div><dl class="facts">${fact('Klageinstans', esc(k.instans))}${fact('Klagesag', esc(k.sagsnr))}${fact('Klaget', fmt(k.dato))}${fact('Forventet afgørelse', fmt(k.frist))}${fact('Status', esc(k.status))}${fact('Resultat', verdict(k.resultat))}${k.genbehandlingFrist ? fact('Genbehandlingsfrist', fmt(k.genbehandlingFrist)) : ''}</dl>
+          ${k.bemaerkning ? `<div class="notes" style="margin-top:12px">${esc(k.bemaerkning)}</div>` : ''}<div class="dactions"><button class="btn sm" data-action="new-event" data-id="${k.id}">Tilføj hændelse til klagen</button></div></div>`; }).join('')}
+        <div class="section-h">Forløb</div>${flowHtml(flowFor(a))}
+      </div>`;
+  } else {
+    const k = s.obj, a = aktById(k.aktId), ki = klageInfo(k);
+    html = `<div class="dhead"><div class="kind"><span>Klage${k.sagsnr ? ', klagesag ' + esc(k.sagsnr) : ''}</span><button class="xbtn" data-action="close-drawer" aria-label="Luk">×</button></div>
+      <h3 id="dTitle">${esc(a ? a.emne : 'Ikke koblet til en aktindsigt')}</h3><div class="muted">${esc(k.instans)}${a ? ', ' + esc(a.myndighed) : ''}</div>
+      <div class="dactions"><button class="btn primary" data-action="edit-klage" data-id="${k.id}">Rediger klage</button><button class="btn" data-action="new-event" data-id="${k.id}">Tilføj hændelse</button>${a ? `<button class="btn" data-action="open-case" data-id="${a.id}">Åbn aktindsigten</button>` : ''}</div></div>
+      <div class="dbody"><div class="c-${ki.cls}" style="margin-bottom:16px"><span class="flabel">${esc(ki.txt)}</span></div>
+        <dl class="facts">${fact('Klaget', fmt(k.dato))}${fact('Forventet afgørelse', fmt(k.frist))}${fact('Status', esc(k.status))}${fact('Resultat', verdict(k.resultat))}${fact('Genbehandlingsfrist', fmt(k.genbehandlingFrist))}${fact('Klagesag', esc(k.sagsnr))}</dl>
+        ${k.bemaerkning ? `<div class="notes">${esc(k.bemaerkning)}</div>` : ''}
+        <div class="section-h">Forløb</div>${a ? flowHtml(flowFor(a)) : flowHtml(eventsFor(k.id).map(e => ({ dato: e.dato, t: e.type, note: e.note, k: 'k-event', evId: e.id })).filter(e => isYmd(e.dato)))}
+      </div>`;
+  }
+  $('drawer').innerHTML = html;
+}
+/* =====================================================================
+   Papirkurv
+   ===================================================================== */
+function trashAkt(id) {
+  const a = aktById(id); if (!a) return;
+  const kl = klagerFor(id), ids = new Set([id, ...kl.map(k => k.id)]);
+  const evs = S.events.filter(e => ids.has(e.sagId));
+  const msg = kl.length ? `Aktindsigten flyttes til papirkurven sammen med ${kl.length} klage${kl.length === 1 ? '' : 'r'}. Fortsæt?` : 'Flyt aktindsigten til papirkurven?';
+  if (!confirm(msg)) return;
+  S.trash.push({ id: uid(), type: 'akt', titel: a.emne, slettet: new Date().toISOString(), data: { akt: a, klager: kl, events: evs } });
+  S.akt = S.akt.filter(x => x.id !== id); S.klager = S.klager.filter(k => !ids.has(k.id)); S.events = S.events.filter(e => !ids.has(e.sagId));
+  closeModal(); closeDrawer(); changed(); toast('Flyttet til papirkurven');
+}
+function trashKlage(id) {
+  const k = S.klager.find(x => x.id === id); if (!k || !confirm('Flyt klagen til papirkurven?')) return;
+  const a = aktById(k.aktId);
+  S.trash.push({ id: uid(), type: 'klage', titel: 'Klage ' + (k.sagsnr || '') + (a ? ' · ' + a.emne : ''), slettet: new Date().toISOString(), data: { klager: [k], events: S.events.filter(e => e.sagId === id) } });
+  S.klager = S.klager.filter(x => x.id !== id); S.events = S.events.filter(e => e.sagId !== id);
+  closeModal(); closeDrawer(); changed(); toast('Flyttet til papirkurven');
+}
+function restore(tid) {
+  const t = S.trash.find(x => x.id === tid); if (!t) return;
+  const d = t.data || {};
+  if (d.akt && !aktById(d.akt.id)) S.akt.push(d.akt);
+  (d.klager || []).forEach(k => { if (!S.klager.some(x => x.id === k.id)) S.klager.push(k); });
+  (d.events || []).forEach(e => { if (!S.events.some(x => x.id === e.id)) S.events.push(e); });
+  S.trash = S.trash.filter(x => x.id !== tid);
+  changed();
+  const orphan = (d.klager || []).some(k => !aktById(k.aktId));
+  toast(orphan ? 'Gendannet. Bemærk: aktindsigten, klagen hører til, ligger stadig i papirkurven.' : 'Sagen er gendannet');
+}
+function destroy(tid) { if (confirm('Slet permanent? Det kan ikke fortrydes.')) { S.trash = S.trash.filter(x => x.id !== tid); changed(); } }
+function emptyTrash() { if (S.trash.length && confirm(`Slet alle ${S.trash.length} elementer i papirkurven permanent? Det kan ikke fortrydes.`)) { S.trash = []; changed(); } }
+
+/* =====================================================================
+   ZIP (læs og skriv) – ingen eksterne biblioteker
+   ===================================================================== */
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_TABLE[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function deflateRaw(data) { const cs = new CompressionStream('deflate-raw'); const s = new Blob([data]).stream().pipeThrough(cs); return new Uint8Array(await new Response(s).arrayBuffer()); }
+async function inflateRaw(data) { const ds = new DecompressionStream('deflate-raw'); const s = new Blob([data]).stream().pipeThrough(ds); return new Uint8Array(await new Response(s).arrayBuffer()); }
+
+async function zipWrite(files) { // files: [{name, text}]
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+  const canDeflate = typeof CompressionStream !== 'undefined';
+  for (const f of files) {
+    const name = enc.encode(f.name), raw = enc.encode(f.text), crc = crc32(raw);
+    let data = raw, method = 0;
+    if (canDeflate) { try { data = await deflateRaw(raw); method = 8; } catch { data = raw; method = 0; } }
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, method, true);
+    lh.setUint16(10, 0, true); lh.setUint16(12, 0x21, true); lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true);
+    lh.setUint32(22, raw.length, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    parts.push(new Uint8Array(lh.buffer), name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, method, true);
+    ch.setUint16(12, 0, true); ch.setUint16(14, 0x21, true); ch.setUint32(16, crc, true); ch.setUint32(20, data.length, true); ch.setUint32(24, raw.length, true);
+    ch.setUint16(28, name.length, true); ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = central.reduce((s, p) => s + p.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  const all = [...parts, ...central, new Uint8Array(end.buffer)], total = all.reduce((s, p) => s + p.length, 0), out = new Uint8Array(total);
+  let p = 0; for (const a of all) { out.set(a, p); p += a.length; }
+  return out;
+}
+
+async function zipRead(buf) {
+  const u = new Uint8Array(buf), dv = new DataView(u.buffer, u.byteOffset, u.byteLength), dec = new TextDecoder();
+  let e = -1; for (let i = u.length - 22; i >= Math.max(0, u.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+  if (e < 0) throw new Error('Filen er ikke en gyldig Excel-fil (.xlsx).');
+  const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true); const files = {};
+  for (let i = 0; i < n; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('Excel-filen er beskadiget.');
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), lo = dv.getUint32(p + 42, true);
+    const name = dec.decode(u.subarray(p + 46, p + 46 + nl));
+    files[name] = { method, csize, lo };
+    p += 46 + nl + xl + cl;
+  }
+  return {
+    names: Object.keys(files),
+    async text(name) {
+      const f = files[name]; if (!f) return null;
+      const start = f.lo + 30 + dv.getUint16(f.lo + 26, true) + dv.getUint16(f.lo + 28, true);
+      const data = u.subarray(start, start + f.csize);
+      const raw = f.method === 0 ? data : f.method === 8 ? await inflateRaw(data) : null;
+      if (!raw) throw new Error('Excel-filen bruger en komprimering, appen ikke kan læse.');
+      return dec.decode(raw);
+    }
+  };
+}
+
+/* =====================================================================
+   XLSX skriv
+   ===================================================================== */
+const xmlEsc = s => String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+const colName = i => { let s = ''; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+const ymdToSerial = s => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d) / 86400000 + 25569; };
+
+function sheetXml(sheet) {
+  const { cols, rows } = sheet;
+  let x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">';
+  x += '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView></sheetViews>';
+  x += '<sheetFormatPr defaultRowHeight="15"/><cols>' + cols.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c.w}" customWidth="1"${c.hidden ? ' hidden="1"' : ''}/>`).join('') + '</cols><sheetData>';
+  x += `<row r="1">` + cols.map((c, i) => `<c r="${colName(i)}1" t="inlineStr" s="1"><is><t>${xmlEsc(c.h)}</t></is></c>`).join('') + '</row>';
+  rows.forEach((r, ri) => {
+    const rn = ri + 2; x += `<row r="${rn}">`;
+    r.forEach((v, ci) => {
+      if (v === undefined || v === null || v === '') return;
+      const ref = colName(ci) + rn, c = cols[ci];
+      if (c.t === 'date' && isYmd(v)) x += `<c r="${ref}" s="2"><v>${ymdToSerial(v)}</v></c>`;
+      else if (typeof v === 'number') x += `<c r="${ref}"><v>${v}</v></c>`;
+      else x += `<c r="${ref}" t="inlineStr"${c.t === 'wrap' ? ' s="3"' : ''}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+    });
+    x += '</row>';
+  });
+  x += '</sheetData>';
+  x += '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
+  return x;
+}
+
+async function buildXlsx(sheets) {
+  const files = [];
+  files.push({ name: '[Content_Types].xml', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') + '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>' });
+  files.push({ name: '_rels/.rels', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>' });
+  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+  files.push({ name: 'docProps/core.xml', text: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>Aktindsigt og klager</dc:title><dc:creator>Aktindsigt &amp; Klager ${VERSION}</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>` });
+  files.push({ name: 'docProps/app.xml', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Microsoft Excel</Application></Properties>' });
+  files.push({ name: 'xl/workbook.xml', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets>' + sheets.map((s, i) => `<sheet name="${xmlEsc(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets></workbook>' });
+  files.push({ name: 'xl/_rels/workbook.xml.rels', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('') + `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` });
+  files.push({ name: 'xl/styles.xml', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="dd\\-mm\\-yyyy"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8EBEF"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>' });
+  sheets.forEach((s, i) => files.push({ name: `xl/worksheets/sheet${i + 1}.xml`, text: sheetXml(s) }));
+  return zipWrite(files);
+}
+
+function workbookSheets() {
+  const akt = S.akt.slice().sort((a, b) => (b.dato || '').localeCompare(a.dato || ''));
+  const kl = S.klager.slice().sort((a, b) => (b.dato || '').localeCompare(a.dato || ''));
+  const evs = S.events.slice().sort((a, b) => (a.sagId === b.sagId ? 0 : 0) || (a.dato || '').localeCompare(b.dato || ''));
+  const titelFor = e => { const s = sagInfo(e.sagId); return s ? s.titel : ''; };
+  return [
+    { name: 'Aktindsigter', cols: [{ h: 'ID', w: 12 }, { h: 'Titel/emne', w: 40 }, { h: 'Myndighed', w: 24 }, { h: 'Journalist', w: 18 }, { h: 'Sagsnummer', w: 14 }, { h: 'Anmodningsdato', w: 15, t: 'date' }, { h: 'Lovfrist (7 arbejdsdage)', w: 15, t: 'date' }, { h: 'Gældende svarfrist', w: 15, t: 'date' }, { h: 'Faktisk svardato', w: 15, t: 'date' }, { h: 'Status', w: 17 }, { h: 'Afgørelse', w: 18 }, { h: 'Bemærkninger', w: 50, t: 'wrap' }],
+      rows: akt.map(a => [a.id, a.emne, a.myndighed, a.journalist, a.sagsnr, a.dato, origFrist(a), a.frist, a.svardato, a.status, a.medhold, a.bemaerkning]) },
+    { name: 'Klagesager', cols: [{ h: 'ID', w: 12 }, { h: 'Aktindsigt-ID', w: 12 }, { h: 'Aktindsigt (emne)', w: 36 }, { h: 'Klagesagsnummer', w: 16 }, { h: 'Klageinstans', w: 22 }, { h: 'Klagedato', w: 13, t: 'date' }, { h: 'Forventet afgørelse', w: 15, t: 'date' }, { h: 'Status', w: 24 }, { h: 'Resultat', w: 28 }, { h: 'Genbehandlingsfrist', w: 15, t: 'date' }, { h: 'Bemærkninger', w: 50, t: 'wrap' }],
+      rows: kl.map(k => [k.id, k.aktId, aktById(k.aktId)?.emne || k._emne || '', k.sagsnr, k.instans, k.dato, k.frist, k.status, k.resultat, k.genbehandlingFrist, k.bemaerkning]) },
+    { name: 'Hændelser', cols: [{ h: 'ID', w: 12 }, { h: 'Sags-ID', w: 12 }, { h: 'Sagstype', w: 11 }, { h: 'Sag (titel)', w: 36 }, { h: 'Type', w: 24 }, { h: 'Dato', w: 13, t: 'date' }, { h: 'Ny frist', w: 13, t: 'date' }, { h: 'Notat', w: 60, t: 'wrap' }],
+      rows: evs.map(e => [e.id, e.sagId, e.sagType === 'klage' ? 'Klage' : 'Aktindsigt', titelFor(e), e.type, e.dato, e.nyFrist, e.note]) },
+    { name: 'Papirkurv', cols: [{ h: 'ID', w: 12 }, { h: 'Type', w: 12 }, { h: 'Titel', w: 40 }, { h: 'Slettet', w: 13, t: 'date' }, { h: 'Data (rør ikke)', w: 30 }],
+      rows: S.trash.map(t => [t.id, t.type === 'akt' ? 'Aktindsigt' : 'Klage', t.titel, (t.slettet || '').slice(0, 10), JSON.stringify(t.data)]) },
+    { name: 'Om filen', cols: [{ h: 'Felt', w: 22 }, { h: 'Værdi', w: 70, t: 'wrap' }],
+      rows: [['Filformat', 'Aktindsigt & Klager 4'], ['Gemt', new Date().toLocaleString('da-DK')], ['Bemærk', 'Kolonnerne ID, Aktindsigt-ID og Sags-ID binder sagerne sammen. Lad dem stå uændret. Nye rækker kan tilføjes i Excel med tomt ID; de får et ID, når filen åbnes i appen.']] }
+  ];
+}
+
+/* =====================================================================
+   XLSX læs
+   ===================================================================== */
+const parseXml = t => new DOMParser().parseFromString(t, 'application/xml');
+const tags = (node, name) => [...node.getElementsByTagNameNS('*', name)];
+const BUILTIN_DATE = new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 45, 46, 47, 50, 51, 52, 53, 54, 55, 56, 57, 58]);
+
+async function readXlsx(buf) {
+  const z = await zipRead(buf);
+  const wbText = await z.text('xl/workbook.xml'); if (!wbText) throw new Error('Filen ligner ikke en Excel-fil (.xlsx).');
+  const wb = parseXml(wbText);
+  const date1904 = tags(wb, 'workbookPr').some(n => ['1', 'true'].includes(n.getAttribute('date1904')));
+  const rels = {}; const relText = await z.text('xl/_rels/workbook.xml.rels');
+  if (relText) tags(parseXml(relText), 'Relationship').forEach(r => { let t = r.getAttribute('Target'); t = t.startsWith('/') ? t.slice(1) : 'xl/' + t; rels[r.getAttribute('Id')] = t.replace(/\/\.\//g, '/'); });
+  const shared = []; const ssText = await z.text('xl/sharedStrings.xml');
+  if (ssText) tags(parseXml(ssText), 'si').forEach(si => shared.push(tags(si, 't').filter(t => t.parentNode.localName !== 'rPh').map(t => t.textContent).join('')));
+  const dateStyles = new Set(); const stText = await z.text('xl/styles.xml');
+  if (stText) {
+    const st = parseXml(stText), custom = {};
+    tags(st, 'numFmt').forEach(n => custom[n.getAttribute('numFmtId')] = n.getAttribute('formatCode') || '');
+    const xfsNode = tags(st, 'cellXfs')[0];
+    if (xfsNode) [...xfsNode.children].forEach((xf, i) => {
+      const id = Number(xf.getAttribute('numFmtId') || 0);
+      if (BUILTIN_DATE.has(id)) dateStyles.add(i);
+      else if (custom[id] !== undefined) { const code = custom[id].replace(/"[^"]*"|\\.|\[[^\]]*\]/g, ''); if (/[dmy]/i.test(code)) dateStyles.add(i); }
+    });
+  }
+  const out = {};
+  for (const s of tags(wb, 'sheet')) {
+    const rid = s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id') || s.getAttribute('r:id');
+    const path = rels[rid]; if (!path) continue;
+    const txt = await z.text(path); if (!txt) continue;
+    const grid = [];
+    tags(parseXml(txt), 'row').forEach((row, ri) => {
+      const rnum = Number(row.getAttribute('r')) || ri + 1, arr = [];
+      tags(row, 'c').forEach((c, ci) => {
+        const ref = c.getAttribute('r'); let col = ci;
+        if (ref) { const L = ref.replace(/\d+/g, ''); col = 0; for (const ch of L) col = col * 26 + (ch.charCodeAt(0) - 64); col--; }
+        const t = c.getAttribute('t'), s = Number(c.getAttribute('s') || 0), vEl = tags(c, 'v')[0], v = vEl ? vEl.textContent : '';
+        let val = '';
+        if (t === 's') val = shared[Number(v)] ?? '';
+        else if (t === 'inlineStr') val = tags(c, 't').map(x => x.textContent).join('');
+        else if (t === 'str' || t === 'e') val = v;
+        else if (t === 'b') val = v === '1' ? 'TRUE' : 'FALSE';
+        else if (v !== '') { const num = Number(v); val = dateStyles.has(s) ? serialToYmd(num + (date1904 ? 1462 : 0)) : num; }
+        arr[col] = val;
+      });
+      grid[rnum - 1] = arr;
+    });
+    out[s.getAttribute('name')] = grid;
+  }
+  return out;
+}
+function serialToYmd(n) { const d = new Date(Math.round((n - 25569) * 86400000)); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`; }
+/* Gør en vilkårlig celleværdi til 'åååå-mm-dd' eller '' */
+function normDate(v) {
+  if (v === undefined || v === null || v === '') return '';
+  if (typeof v === 'number') return v > 20000 && v < 80000 ? serialToYmd(v) : '';
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/); if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+  if (/^\d{5}(\.\d+)?$/.test(s)) return serialToYmd(Number(s));
+  return '';
+}
+const norm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+/* Gør et ark til objekter ud fra overskriftsrækken. Tolererer ekstra kolonner og ændret rækkefølge. */
+function sheetObjects(grid) {
+  if (!grid || !grid.length) return [];
+  const hi = grid.findIndex(r => r && r.some(c => c !== undefined && c !== ''));
+  if (hi < 0) return [];
+  const head = (grid[hi] || []).map(norm), out = [];
+  for (let i = hi + 1; i < grid.length; i++) {
+    const r = grid[i]; if (!r || !r.some(c => c !== undefined && String(c).trim() !== '')) continue;
+    const o = {}; head.forEach((h, j) => { if (h) o[h] = r[j]; }); out.push(o);
+  }
+  return out;
+}
+const pick = (o, ...names) => { for (const n of names) { const v = o[norm(n)]; if (v !== undefined && v !== null && String(v).trim() !== '') return typeof v === 'string' ? v.trim() : v; } return ''; };
+const str = v => v === '' || v === undefined || v === null ? '' : String(v).trim();
+
+function findSheet(book, ...names) { const keys = Object.keys(book); for (const n of names) { const k = keys.find(k => norm(k) === norm(n)); if (k) return book[k]; } return null; }
+
+/* Konverterer en indlæst projektmappe til appens data. Understøtter både nyt og gammelt format. */
+function bookToState(book) {
+  const aSheet = findSheet(book, 'Aktindsigter');
+  if (!aSheet) throw new Error('Filen har ikke et ark, der hedder “Aktindsigter”. Er det den rigtige fil?');
+  const aRows = sheetObjects(aSheet), kRows = sheetObjects(findSheet(book, 'Klagesager', 'Klager') || []);
+  const eSheet = findSheet(book, 'Hændelser');
+  const isOld = !eSheet && !(aRows.length && pick(aRows[0], 'ID') !== '') && aRows.some(r => r[norm('Historik JSON')] !== undefined);
+  const st = emptyState(), notes = [], usedIds = new Set(); let assigned = 0;
+  const newId = v => { let id = str(v); if (!id || usedIds.has(id)) { id = uid(); assigned++; } usedIds.add(id); return id; };
+  const parseHist = v => { try { const x = typeof v === 'string' && v.trim() ? JSON.parse(v) : []; return Array.isArray(x) ? x : []; } catch { return []; } };
+
+  aRows.forEach(r => {
+    const a = {
+      id: newId(pick(r, 'ID')), emne: str(pick(r, 'Titel/emne', 'Titel / emne', 'Emne', 'Titel')), myndighed: str(pick(r, 'Myndighed')),
+      journalist: str(pick(r, 'Journalist')), sagsnr: str(pick(r, 'Sagsnummer', 'Sagsnr')), dato: normDate(pick(r, 'Anmodningsdato', 'Dato')),
+      frist: normDate(pick(r, 'Gældende svarfrist')), svardato: normDate(pick(r, 'Faktisk svardato', 'Svardato')),
+      status: str(pick(r, 'Status')) || 'Under behandling', medhold: str(pick(r, 'Afgørelse', 'Afgørelse/Medhold')) || 'Afventer', bemaerkning: str(pick(r, 'Bemærkninger', 'Bemærkning'))
+    };
+    // Samme som lovfristen (eller den gamle apps automatiske frist): lad fristen være automatisk
+    if (a.frist && (a.frist === addWorkdays(a.dato, LOVFRIST) || a.frist === normDate(pick(r, 'Oprindelig svarfrist')))) a.frist = '';
+    st.akt.push(a);
+    parseHist(r[norm('Historik JSON')]).forEach(h => st.events.push({ id: uid(), sagId: a.id, sagType: 'akt', type: str(h.type) || 'Notat', dato: normDate(h.dato), nyFrist: normDate(h.nyFrist), note: str(h.note) }));
+  });
+  let unlinked = 0;
+  kRows.forEach(r => {
+    const aid = str(pick(r, 'Aktindsigt-ID')), sn = str(pick(r, 'Relateret Aktindsigt Sagsnr')), em = str(pick(r, 'Aktindsigt (emne)', 'Relateret Emne'));
+    let a = aid && st.akt.find(x => x.id === aid);
+    if (!a && sn) a = st.akt.find(x => x.sagsnr && x.sagsnr === sn);
+    if (!a && em) { const m = st.akt.filter(x => norm(x.emne) === norm(em)); if (m.length === 1) a = m[0]; else if (m.length > 1) notes.push(`Klagen “${em}” passer på flere aktindsigter. Vælg den rigtige under Klageregnskab.`); }
+    const k = {
+      id: newId(pick(r, 'ID')), aktId: a ? a.id : '', sagsnr: str(pick(r, 'Klagesagsnummer')), instans: str(pick(r, 'Klageinstans')) || 'Anden',
+      dato: normDate(pick(r, 'Klagedato')), frist: normDate(pick(r, 'Forventet afgørelse')), status: str(pick(r, 'Status')) || 'Under behandling',
+      resultat: str(pick(r, 'Resultat', 'Klageresultat/Medhold')) || 'Afventer', genbehandlingFrist: normDate(pick(r, 'Genbehandlingsfrist')), bemaerkning: str(pick(r, 'Bemærkninger'))
+    };
+    if (!a) { unlinked++; k._emne = em; }
+    st.klager.push(k);
+    parseHist(r[norm('Historik JSON')]).forEach(h => st.events.push({ id: uid(), sagId: k.id, sagType: 'klage', type: str(h.type) || 'Notat', dato: normDate(h.dato), nyFrist: normDate(h.nyFrist), note: str(h.note) }));
+  });
+  if (eSheet) {
+    let lost = 0;
+    sheetObjects(eSheet).forEach(r => {
+      const sagId = str(pick(r, 'Sags-ID'));
+      const isA = st.akt.some(a => a.id === sagId), isK = st.klager.some(k => k.id === sagId);
+      if (!isA && !isK) { lost++; return; }
+      st.events.push({ id: newId(pick(r, 'ID')), sagId, sagType: isK ? 'klage' : 'akt', type: str(pick(r, 'Type')) || 'Notat', dato: normDate(pick(r, 'Dato')), nyFrist: normDate(pick(r, 'Ny frist')), note: str(pick(r, 'Notat')) });
+    });
+    if (lost) notes.push(`${lost} hændelse${lost === 1 ? '' : 'r'} i filen pegede på en sag, der ikke findes, og blev sprunget over.`);
+  }
+  const tSheet = findSheet(book, 'Papirkurv');
+  if (tSheet) sheetObjects(tSheet).forEach(r => {
+    try { const data = JSON.parse(pick(r, 'Data (rør ikke)', 'Data')); st.trash.push({ id: newId(pick(r, 'ID')), type: norm(pick(r, 'Type')) === 'klage' ? 'klage' : 'akt', titel: str(pick(r, 'Titel')), slettet: normDate(pick(r, 'Slettet')), data }); } catch { }
+  });
+  if (unlinked) notes.unshift(`${unlinked} klage${unlinked === 1 ? '' : 'r'} kunne ikke kobles til en aktindsigt. Du kan koble ${unlinked === 1 ? 'den' : 'dem'} under Klageregnskab.`);
+  const noDate = st.akt.filter(a => !a.dato).length;
+  if (noDate) notes.push(`${noDate} aktindsigt${noDate === 1 ? '' : 'er'} mangler anmodningsdato, så fristen kan ikke beregnes.`);
+  if (assigned && !isOld) notes.push(`${assigned} række${assigned === 1 ? '' : 'r'} uden ID (fx tilføjet i Excel) har fået et ID. Gem filen, så ID'erne bliver skrevet ind.`);
+  return { state: st, isOld, notes, assigned: !isOld && assigned > 0 };
+}
+
+/* =====================================================================
+   Filhåndtering
+   ===================================================================== */
+const XLSX_TYPES = [{ description: 'Excel-fil', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }];
+const canFS = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
+const IDB = 'aktindsigt_v4_handles_test';
+function idb() { return new Promise((res, rej) => { const r = indexedDB.open(IDB, 1); r.onupgradeneeded = () => r.result.createObjectStore('h'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function rememberHandle(h) { lastName = h?.name || ''; try { const db = await idb(); db.transaction('h', 'readwrite').objectStore('h').put(h, 'last'); } catch { } }
+async function forgetHandle() { lastName = ''; try { const db = await idb(); db.transaction('h', 'readwrite').objectStore('h').delete('last'); } catch { } }
+async function recallHandle() { try { const db = await idb(); return await new Promise(res => { const r = db.transaction('h').objectStore('h').get('last'); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); }); } catch { return null; } }
+
+const confirmDiscard = () => !dirty || confirm('Du har ændringer, der ikke er gemt i Excel-filen. Vil du kassere dem?');
+
+async function openFile() {
+  if (!confirmDiscard()) return;
+  if (canFS) {
+    try { const [h] = await window.showOpenFilePicker({ types: XLSX_TYPES, multiple: false }); await loadFile(await h.getFile(), h); }
+    catch (e) { if (e.name !== 'AbortError') showError('Filen kunne ikke åbnes', e); }
+  } else $('fileInput').click();
+}
+
+async function loadFile(file, handle, dbxMeta, quiet) {
+  const buf = await file.arrayBuffer();
+  const book = await readXlsx(buf);
+  const { state, isOld, notes, assigned } = bookToState(book);
+  S = state; fileHandle = handle || null; fileName = file.name; fileModified = file.lastModified; dirty = !!assigned; oldFormat = isOld; handlePending = false;
+  if (dbxMeta) setDbxSource(dbxMeta); else { setDbxSource(null); if (handle) rememberHandle(handle); else forgetHandle(); }
+  saveLocal(); render();
+  const msg = `${dbxMeta ? 'Hentet fra Dropbox' : 'Indlæst'}: ${S.akt.length} aktindsigter, ${S.klager.length} klager, ${S.events.length} hændelser.`;
+  if (notes.length || isOld) {
+    openModal('Filen er åbnet', `<p>${esc(msg)}</p>${isOld ? '<p><b>Filen er i det gamle format.</b> Alt er læst ind. Når du trykker “Gem Excel”, konverteres filen til det nye format med ID-kolonner, rigtige datoer og et ark med hændelser. Tag eventuelt en kopi af den gamle fil først.</p>' : ''}${notes.length ? '<ul>' + notes.map(n => `<li>${esc(n)}</li>`).join('') + '</ul>' : ''}<div class="formbtns mt"><button class="btn primary" data-action="close">OK</button></div>`);
+  } else toast(msg);
+}
+
+async function writeToHandle(h) {
+  const bytes = await buildXlsx(workbookSheets());
+  const w = await h.createWritable(); await w.write(bytes); await w.close();
+  fileModified = (await h.getFile()).lastModified;
+}
+function lockedMsg(e) {
+  if (['NoModificationAllowedError', 'InvalidStateError', 'NotReadableError'].includes(e?.name)) return 'Filen er måske åben i Excel. Luk den i Excel, og prøv igen.';
+  return e?.message || String(e);
+}
+
+async function saveFile() {
+  if (dbx) return dbxSave();
+  if (!fileHandle && handlePending) {
+    const h = await recallHandle();
+    if (h) {
+      try {
+        if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') { toast('Browseren fik ikke lov at skrive i filen.'); return; }
+        const f = await h.getFile();
+        if (backupAt && f.lastModified > backupAt + 1000 && !confirm(`“${h.name}” er blevet ændret, efter at appen sidst gemte sin kopi, fx på en anden computer.\n\nVil du overskrive filen med det, du ser i appen nu?\n\nVælg Annuller, og tryk “Hent filen” for at hente den nyeste version i stedet.`)) return;
+        fileHandle = h; fileModified = f.lastModified; handlePending = false;
+      } catch (e) { showError('Filen kunne ikke åbnes', e); return; }
+    }
+  }
+  if (!fileHandle) return saveAs();
+  try {
+    let p = await fileHandle.queryPermission({ mode: 'readwrite' });
+    if (p !== 'granted') p = await fileHandle.requestPermission({ mode: 'readwrite' });
+    if (p !== 'granted') { toast('Appen fik ikke lov at skrive i filen. Brug “Gem som…”.'); return; }
+    const cur = await fileHandle.getFile();
+    if (fileModified && cur.lastModified > fileModified + 1000 && !confirm(`“${fileName}” er blevet ændret uden for appen (fx i Excel), siden du åbnede den.\n\nVil du overskrive filen med appens data?\n\nVælg Annuller, og brug derefter “Åbn Excel”, hvis du vil hente ændringerne fra Excel i stedet.`)) return;
+    await writeToHandle(fileHandle);
+    dirty = false; oldFormat = false; handlePending = false; saveLocal(); render(); toast('Gemt i ' + fileName);
+  } catch (e) { showError('Filen kunne ikke gemmes', { message: lockedMsg(e) }); }
+}
+
+async function saveAs() {
+  const suggested = (fileName || 'Aktindsigt-og-klager.xlsx').replace(/\.xlsx$/i, '') + '.xlsx';
+  if (canFS) {
+    try {
+      const h = await window.showSaveFilePicker({ suggestedName: suggested, types: XLSX_TYPES });
+      await writeToHandle(h);
+      fileHandle = h; fileName = h.name; dirty = false; oldFormat = false; handlePending = false; setDbxSource(null); rememberHandle(h); saveLocal(); render(); toast('Gemt som ' + fileName);
+    } catch (e) { if (e.name !== 'AbortError') showError('Filen kunne ikke gemmes', { message: lockedMsg(e) }); }
+  } else {
+    try {
+      const bytes = await buildXlsx(workbookSheets());
+      const url = URL.createObjectURL(new Blob([bytes], { type: XLSX_TYPES[0].accept && 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      const a = document.createElement('a'); a.href = url; a.download = suggested; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      fileName = suggested; dirty = false; oldFormat = false; saveLocal(); render();
+      toast('Filen er hentet. Find den i mappen Overførsler.');
+    } catch (e) { showError('Filen kunne ikke gemmes', e); }
+  }
+}
+
+function newFile() {
+  if (!confirmDiscard()) return;
+  if (!dirty && (S.akt.length || S.klager.length) && !confirm('Starte en ny, tom fil? Den nuværende Excel-fil bliver ikke ændret.')) return;
+  S = emptyState(); fileHandle = null; fileName = ''; dirty = false; oldFormat = false; handlePending = false; dbxPending = false; setDbxSource(null); forgetHandle(); saveLocal(); render();
+}
+
+async function openRecent() {
+  const h = await recallHandle();
+  if (!h) { toast('Appen kan ikke finde den senest brugte fil. Vælg “Åbn Excel-fil…”.'); return; }
+  if (!confirmDiscard()) return;
+  try {
+    if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') { toast('Browseren fik ikke lov at åbne filen.'); return; }
+    await loadFile(await h.getFile(), h);
+  } catch (e) { showError('Filen kunne ikke åbnes', { message: e?.name === 'NotFoundError' ? `“${h.name}” findes ikke længere det sted, den lå. Vælg “Åbn Excel-fil…” for at finde den.` : (e?.message || String(e)) }); }
+}
+
+async function reconnect() {
+  const h = await recallHandle(); if (!h) { handlePending = false; render(); return; }
+  try {
+    if (dirty && h.name !== fileName && !confirmDiscard()) return;
+    const p = await h.requestPermission({ mode: 'readwrite' });
+    if (p !== 'granted') { toast('Browseren fik ikke lov at åbne filen.'); return; }
+    const f = await h.getFile();
+    if (!dirty || h.name !== fileName) { dirty = false; await loadFile(f, h); }
+    else { fileHandle = h; handlePending = false; fileModified = f.lastModified; render(); toast('Forbundet til ' + h.name + '. Husk at gemme dine ændringer.'); }
+  } catch (e) { showError('Filen kunne ikke åbnes', e); }
+}
+
+function showError(title, e) {
+  openModal(title, `<p class="err">${esc(e?.message || String(e))}</p><div class="formbtns mt"><button class="btn primary" data-action="close">OK</button></div>`);
+}
+function toast(s) { document.querySelectorAll('.toast').forEach(t => t.remove()); const d = document.createElement('div'); d.className = 'toast'; d.setAttribute('role', 'status'); d.textContent = s; document.body.appendChild(d); setTimeout(() => d.remove(), 3500); }
+
+
+/* =====================================================================
+   Dropbox: åbn og gem Excel-filen direkte i Dropbox (alle browsere, også iPhone/iPad)
+   Logger ind med OAuth 2 + PKCE, så der ingen hemmelig nøgle ligger i appen.
+   Appen har kun adgang til sin egen mappe: Dropbox/Apps/<appens navn>/
+   ===================================================================== */
+const DBX_AUTH_KEY = 'aktindsigt_dbx_auth_test', DBX_FILE_KEY = 'aktindsigt_dbx_file_test';
+const DBX_REDIRECT = location.origin + location.pathname;
+const dbxReady = () => !!DROPBOX_APP_KEY && /^https?:/.test(location.protocol);
+let dbx = null, dbxPending = false, leavingForAuth = false;
+
+const dbxAuth = () => { try { return JSON.parse(localStorage.getItem(DBX_AUTH_KEY) || 'null'); } catch { return null; } };
+const setDbxAuth = a => a ? localStorage.setItem(DBX_AUTH_KEY, JSON.stringify(a)) : localStorage.removeItem(DBX_AUTH_KEY);
+const setDbxFile = m => m ? localStorage.setItem(DBX_FILE_KEY, JSON.stringify(m)) : localStorage.removeItem(DBX_FILE_KEY);
+const dbxStoredFile = () => { try { return JSON.parse(localStorage.getItem(DBX_FILE_KEY) || 'null'); } catch { return null; } };
+const b64url = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const randStr = n => b64url(crypto.getRandomValues(new Uint8Array(n)));
+const hdrJson = o => JSON.stringify(o).replace(/[\u007f-￿]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+
+class DbxError extends Error { constructor(msg, status, summary) { super(msg); this.status = status; this.summary = summary || ''; } }
+
+async function dbxLogin(next) {
+  if (!dbxReady()) { toast('Dropbox er ikke sat op i denne udgave af appen.'); return; }
+  const verifier = randStr(48), state = randStr(16);
+  const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  sessionStorage.setItem('dbx_pkce', JSON.stringify({ verifier, state, next }));
+  saveLocal(); leavingForAuth = true;
+  const p = new URLSearchParams({ client_id: DROPBOX_APP_KEY, response_type: 'code', code_challenge: challenge, code_challenge_method: 'S256', redirect_uri: DBX_REDIRECT, token_access_type: 'offline', state });
+  location.href = 'https://www.dropbox.com/oauth2/authorize?' + p;
+}
+
+/* Når Dropbox sender brugeren tilbage efter login. Returnerer den handling, der skal fortsættes med. */
+async function dbxHandleReturn() {
+  const u = new URL(location.href);
+  if (!u.searchParams.has('code') && !u.searchParams.has('error')) return null;
+  const pk = JSON.parse(sessionStorage.getItem('dbx_pkce') || 'null'); sessionStorage.removeItem('dbx_pkce');
+  history.replaceState(null, '', DBX_REDIRECT);
+  if (u.searchParams.has('error')) { toast('Du blev ikke logget ind i Dropbox.'); return null; }
+  if (!pk || pk.state !== u.searchParams.get('state')) { toast('Login i Dropbox mislykkedes. Prøv igen.'); return null; }
+  const r = await fetch('https://api.dropboxapi.com/oauth2/token', { method: 'POST', body: new URLSearchParams({ code: u.searchParams.get('code'), grant_type: 'authorization_code', code_verifier: pk.verifier, client_id: DROPBOX_APP_KEY, redirect_uri: DBX_REDIRECT }) });
+  if (!r.ok) { toast('Login i Dropbox mislykkedes. Prøv igen.'); return null; }
+  const t = await r.json();
+  setDbxAuth({ refresh: t.refresh_token, access: t.access_token, exp: Date.now() + (t.expires_in || 14400) * 1000, account: t.account_id });
+  return pk.next || 'open';
+}
+
+async function dbxToken(force) {
+  const a = dbxAuth(); if (!a) throw new DbxError('login', 401);
+  if (!force && a.access && a.exp > Date.now() + 60000) return a.access;
+  const r = await fetch('https://api.dropboxapi.com/oauth2/token', { method: 'POST', body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: a.refresh, client_id: DROPBOX_APP_KEY }) });
+  if (r.status === 400 || r.status === 401) { setDbxAuth(null); throw new DbxError('login', 401); }
+  if (!r.ok) throw new DbxError('Dropbox svarede ikke. Prøv igen om lidt.', r.status);
+  const t = await r.json();
+  a.access = t.access_token; a.exp = Date.now() + (t.expires_in || 14400) * 1000; setDbxAuth(a);
+  return a.access;
+}
+
+/* Kalder Dropbox og forsøger én gang igen med ny adgangsnøgle, hvis den er udløbet */
+async function dbxFetch(url, opts, retry = true) {
+  let r;
+  try { r = await fetch(url, { ...opts, headers: { ...opts.headers, Authorization: 'Bearer ' + await dbxToken() } }); }
+  catch (e) { if (e instanceof DbxError) throw e; throw new DbxError('Appen kunne ikke få forbindelse til Dropbox. Tjek internetforbindelsen.', 0); }
+  if (r.status === 401 && retry) { await dbxToken(true); return dbxFetch(url, opts, false); }
+  if (!r.ok) {
+    let summary = ''; try { const j = await r.json(); summary = j.error_summary || ''; } catch { }
+    throw new DbxError(summary.startsWith('path/not_found') ? 'Filen findes ikke længere i Dropbox.' : 'Dropbox gav en fejl: ' + (summary || r.status), r.status, summary);
+  }
+  return r;
+}
+const dbxRpc = async (ep, body) => (await dbxFetch('https://api.dropboxapi.com/2/' + ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+
+async function dbxDownload(path) {
+  const r = await dbxFetch('https://content.dropboxapi.com/2/files/download', { method: 'POST', headers: { 'Dropbox-API-Arg': hdrJson({ path }) } });
+  const meta = JSON.parse(r.headers.get('Dropbox-API-Result') || '{}');
+  return { bytes: await r.arrayBuffer(), meta };
+}
+async function dbxUpload(path, bytes, mode) {
+  const r = await dbxFetch('https://content.dropboxapi.com/2/files/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'Dropbox-API-Arg': hdrJson({ path, mode, autorename: false, mute: true }) }, body: bytes });
+  return r.json();
+}
+const isConflict = e => e instanceof DbxError && e.status === 409 && /conflict/.test(e.summary);
+const needLogin = e => e instanceof DbxError && e.message === 'login';
+function dbxFail(title, e, next) {
+  if (needLogin(e)) { openModal('Log ind i Dropbox igen', `<p>Forbindelsen til Dropbox er udløbet eller blevet afbrudt. Log ind igen for at fortsætte. Dine data i appen bliver bevaret.</p><div class="formbtns mt"><button class="btn primary" data-action="dbx-login" data-next="${next || 'open'}">Log ind i Dropbox</button><button class="btn" data-action="close">Annuller</button></div>`); return; }
+  showError(title, { message: e?.message || String(e) });
+}
+
+function setDbxSource(meta) {
+  dbx = meta ? { path: meta.path_display || meta.path_lower || meta.path, name: meta.name, rev: meta.rev } : null;
+  setDbxFile(dbx);
+}
+
+/* Vis Excel-filerne i appens Dropbox-mappe */
+async function dbxPicker() {
+  if (!dbxAuth()) return dbxLogin('open');
+  openModal('Åbn fra Dropbox', '<p class="muted">Henter listen over filer…</p>');
+  try {
+    let res = await dbxRpc('files/list_folder', { path: '', recursive: false }), all = res.entries;
+    while (res.has_more) { res = await dbxRpc('files/list_folder/continue', { cursor: res.cursor }); all = all.concat(res.entries); }
+    const files = all.filter(f => f['.tag'] === 'file' && /\.xlsx$/i.test(f.name)).sort((a, b) => (b.server_modified || '').localeCompare(a.server_modified || ''));
+    const when = s => { const d = new Date(s); return isNaN(d) ? '' : d.toLocaleString('da-DK', { dateStyle: 'medium', timeStyle: 'short' }); };
+    $('modalBody').innerHTML = files.length
+      ? `<p class="muted">Excel-filer i appens mappe i din Dropbox.</p><div class="register"><table><tbody>${files.map(f => `<tr><td><b>${esc(f.name)}</b><div class="meta">Ændret ${esc(when(f.server_modified))}</div></td><td style="text-align:right;vertical-align:middle"><button class="btn sm primary" data-action="dbx-open-file" data-path="${esc(f.path_display || f.path_lower)}">Åbn</button></td></tr>`).join('')}</tbody></table></div>
+         <div class="formbtns mt"><button class="btn" data-action="close">Annuller</button><button class="linkbtn right" data-action="dbx-disconnect">Afbryd forbindelsen til Dropbox</button></div>`
+      : `<p>Der er ingen Excel-filer i appens mappe i din Dropbox endnu. Mappen hedder <b>Apps</b> og ligger øverst i din Dropbox. Inde i den har appen sin egen mappe.</p>
+         <p>Du kan enten lægge din Excel-fil i den mappe og prøve igen, eller åbne filen her i appen og vælge “Gem i Dropbox som…”.</p>
+         <div class="formbtns mt"><button class="btn primary" data-action="dbx-open">Prøv igen</button><button class="btn" data-action="close">Luk</button></div>`;
+  } catch (e) { closeModal(); dbxFail('Dropbox kunne ikke vise dine filer', e, 'open'); }
+}
+
+async function dbxOpen(path, quiet) {
+  const { bytes, meta } = await dbxDownload(path);
+  const file = new File([bytes], meta.name || path.split('/').pop(), { lastModified: Date.parse(meta.server_modified || '') || Date.now() });
+  await loadFile(file, null, meta, quiet);
+  dbxPending = false; render();
+}
+
+async function dbxSave() {
+  let bytes;
+  try {
+    bytes = await buildXlsx(workbookSheets());
+    let meta;
+    try { meta = await dbxUpload(dbx.path, bytes, dbx.rev ? { '.tag': 'update', update: dbx.rev } : { '.tag': 'overwrite' }); }
+    catch (e) {
+      if (!isConflict(e)) throw e;
+      if (!confirm(`“${dbx.name}” er blevet ændret i Dropbox, fx på en anden enhed, siden du hentede den.\n\nVil du overskrive filen i Dropbox med det, du ser i appen nu?\n\nVælg Annuller, hvis du hellere vil hente den nyeste version via Fil → Åbn fra Dropbox. Så mister du dog de ændringer, du ikke har gemt.`)) return;
+      meta = await dbxUpload(dbx.path, bytes, { '.tag': 'overwrite' });
+    }
+    setDbxSource(meta); fileName = meta.name; dirty = false; oldFormat = false; dbxPending = false; saveLocal(); render(); toast('Gemt i Dropbox');
+  } catch (e) { dbxFail('Filen kunne ikke gemmes i Dropbox', e, 'save'); }
+}
+
+function dbxSaveAsForm() {
+  if (!dbxAuth()) return dbxLogin('saveas');
+  const suggested = (fileName || 'Aktindsigt-og-klager.xlsx').replace(/\.xlsx$/i, '') + '.xlsx';
+  openModal('Gem i Dropbox som…', `<form id="f" novalidate><label for="dbxName">Filnavn</label><input id="dbxName" name="name" value="${esc(suggested)}" autocomplete="off">
+    <div class="hint">Filen gemmes i appens mappe i din Dropbox (Apps).</div><div class="err" id="ferr" role="alert"></div>
+    <div class="formbtns mt"><button class="btn primary">Gem i Dropbox</button><button type="button" class="btn" data-action="close">Annuller</button></div></form>`);
+  $('f').onsubmit = async ev => {
+    ev.preventDefault();
+    let name = $('dbxName').value.trim().replace(/[\\/:*?"<>|]/g, '-');
+    if (!name) { $('ferr').textContent = 'Skriv et filnavn.'; return; }
+    if (!/\.xlsx$/i.test(name)) name += '.xlsx';
+    closeModal();
+    try {
+      const bytes = await buildXlsx(workbookSheets());
+      let meta;
+      try { meta = await dbxUpload('/' + name, bytes, { '.tag': 'add' }); }
+      catch (e) {
+        if (!isConflict(e)) throw e;
+        if (!confirm(`Der findes allerede en fil, der hedder “${name}”, i Dropbox. Vil du overskrive den?`)) return;
+        meta = await dbxUpload('/' + name, bytes, { '.tag': 'overwrite' });
+      }
+      setDbxSource(meta); fileHandle = null; handlePending = false; fileName = meta.name; dirty = false; oldFormat = false; dbxPending = false;
+      saveLocal(); render(); toast('Gemt i Dropbox som ' + meta.name);
+    } catch (e) { dbxFail('Filen kunne ikke gemmes i Dropbox', e, 'saveas'); }
+  };
+}
+
+async function dbxDisconnect() {
+  if (!confirm('Afbryde forbindelsen til Dropbox på denne enhed? Filen i Dropbox bliver ikke slettet, og dine data i appen bliver liggende.')) return;
+  try { await dbxRpc('auth/token/revoke', null); } catch { }
+  setDbxAuth(null);
+  if (dbx) { setDbxSource(null); fileName = ''; dbxPending = false; }
+  closeModal(); saveLocal(); render(); toast('Forbindelsen til Dropbox er afbrudt');
+}
+
+async function dbxStart(next) {
+  const stored = dbxStoredFile();
+  if (next === 'open') { await dbxPicker(); return; }
+  if (next === 'saveas') { dbxSaveAsForm(); return; }
+  if (!stored || !dbxAuth()) return;
+  dbx = stored; fileName = stored.name; handlePending = false;
+  if (next === 'save') { await dbxSave(); return; }
+  if (dirty) { toast('Du har ændringer fra sidst, som ikke er gemt i Dropbox.'); return; }
+  try { await dbxOpen(stored.path, true); }
+  catch (e) { dbxPending = true; render(); if (needLogin(e)) dbxFail('', e, 'reload'); }
+}
+
+/* =====================================================================
+   Opstart
+   ===================================================================== */
+function migrateOldLocal() {
+  // Data fra den gamle app (v3), hvis de findes i browseren
+  try {
+    const A = JSON.parse(localStorage.getItem('aktindsigter_db') || 'null'), K = JSON.parse(localStorage.getItem('klager_db') || 'null');
+    if (!Array.isArray(A) || !A.length) return false;
+    const conv = (list, kind) => list.map(x => kind === 'akt'
+      ? { 'ID': x.id, 'Emne': x.emne, 'Myndighed': x.myndighed, 'Journalist': x.journalist, 'Sagsnummer': x.sagsnr, 'Anmodningsdato': x.dato, 'Gældende svarfrist': x.frist, 'Faktisk svardato': x.svardato, 'Status': x.status, 'Afgørelse/Medhold': x.medhold, 'Bemærkninger': x.bemaerkning, 'Historik JSON': JSON.stringify(x.historik || []) }
+      : { 'ID': x.id, 'Aktindsigt-ID': x.aktId, 'Klagesagsnummer': x.sagsnr, 'Klageinstans': x.instans, 'Klagedato': x.dato, 'Forventet afgørelse': x.frist, 'Status': x.status, 'Klageresultat/Medhold': x.resultat, 'Genbehandlingsfrist': x.genbehandlingFrist, 'Bemærkninger': x.bemaerkning, 'Historik JSON': JSON.stringify(x.historik || []) });
+    const toGrid = rows => { const h = [...new Set(rows.flatMap(Object.keys))]; return [h, ...rows.map(r => h.map(k => r[k] ?? ''))]; };
+    const book = { 'Aktindsigter': toGrid(conv(A, 'akt')), 'Klagesager': toGrid(conv(Array.isArray(K) ? K : [], 'klage')) };
+    S = bookToState(book).state; dirty = true; fileName = '';
+    return true;
+  } catch { return false; }
+}
+
+async function start() {
+  let restored = false;
+  try {
+    const b = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (b && b.S) { S = { ...emptyState(), ...b.S }; fileName = b.fileName || ''; dirty = !!b.dirty; oldFormat = !!b.oldFormat; restored = true; backupAt = Date.parse(b.savedAt || '') || 0; }
+  } catch { }
+  if (false && !restored && migrateOldLocal()) toast('Data fra den gamle version er hentet fra browseren. Gem dem i en Excel-fil.');
+  let next = null;
+  if (dbxReady()) { try { next = await dbxHandleReturn(); } catch { toast('Login i Dropbox mislykkedes. Prøv igen.'); } }
+  const useDbx = dbxReady() && !!dbxStoredFile() && !!dbxAuth();
+  if (canFS) {
+    const h = await recallHandle();
+    lastName = h?.name || '';
+    if (h && !useDbx && (!fileName || h.name === fileName)) {
+      if (!fileName) fileName = h.name;
+      try {
+        const p = await h.queryPermission({ mode: 'readwrite' });
+        if (p === 'granted') {
+          fileHandle = h; const f = await h.getFile();
+          if (!dirty) await loadFile(f, h); else fileModified = f.lastModified;
+        } else handlePending = true;
+      } catch { handlePending = false; }
+    }
+  }
+  render();
+  if (dbxReady() && (next || useDbx)) { await dbxStart(next); return; }
+  if (restored && dirty && !handlePending) toast('Du har ændringer fra sidst, som ikke er gemt i Excel-filen.');
+}
+
+/* Klik og taster */
+document.addEventListener('click', e => {
+  const go = e.target.closest('[data-view-go]'); if (go) { view = go.dataset.viewGo; render(); return; }
+  const nav = e.target.closest('.tabs button'); if (nav) { view = nav.dataset.view; closeDrawer(); $('search').value = ''; $('fStatus').value = ''; $('fMyn').value = ''; render(); return; }
+  const b = e.target.closest('[data-action]');
+  if (!b) { const row = e.target.closest('tr[data-open]'); if (row) openDrawer(row.dataset.open); return; }
+  const fm = $('fileMenu'); if (fm.open && b.closest('#fileMenu .menu')) fm.open = false;
+  const id = b.dataset.id;
+  switch (b.dataset.action) {
+    case 'open': openFile(); break;
+    case 'save': saveFile(); break;
+    case 'saveas': saveAs(); break;
+    case 'new': newFile(); break;
+    case 'reconnect': reconnect(); break;
+    case 'open-recent': openRecent(); break;
+    case 'dbx-open': dbxPicker(); break;
+    case 'dbx-saveas': dbxSaveAsForm(); break;
+    case 'dbx-disconnect': dbxDisconnect(); break;
+    case 'dbx-login': closeModal(); dbxLogin(b.dataset.next || 'open'); break;
+    case 'dbx-open-file': if (confirmDiscard()) { closeModal(); dbxOpen(b.dataset.path).catch(err => dbxFail('Filen kunne ikke hentes fra Dropbox', err, 'open')); } break;
+    case 'dbx-reload':
+      if (!dbx) break;
+      (dirty ? dbxRpc('files/get_metadata', { path: dbx.path }).then(() => { dbxPending = false; render(); toast('Forbindelsen til Dropbox virker igen. Husk at gemme.'); }) : dbxOpen(dbx.path))
+        .catch(err => { dbxPending = true; render(); dbxFail('Filen kunne ikke hentes fra Dropbox', err, 'reload'); });
+      break;
+    case 'close': closeModal(); break;
+    case 'new-item': view === 'klage' ? klageForm() : aktForm(); break;
+    case 'edit-akt': aktForm(aktById(id)); break;
+    case 'edit-klage': klageForm(S.klager.find(k => k.id === id)); break;
+    case 'new-klage': klageForm({}, id); break;
+    case 'timeline': case 'events': case 'open-case': closeModal(); openDrawer(id); break;
+    case 'close-drawer': closeDrawer(); break;
+    case 'quick-rykker': eventForm(id); break;
+    case 'new-event': eventForm(id); break;
+    case 'edit-event': eventForm(null, id); break;
+    case 'del-event': { const ev = S.events.find(x => x.id === id); if (ev && confirm('Slet hændelsen?')) { S.events = S.events.filter(x => x.id !== id); closeModal(); changed(); } break; }
+    case 'trash-akt': trashAkt(id); break;
+    case 'trash-klage': trashKlage(id); break;
+    case 'restore': restore(id); break;
+    case 'destroy': destroy(id); break;
+    case 'empty-trash': emptyTrash(); break;
+  }
+});
+$('fileInput').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (f) { try { await loadFile(f, null); } catch (err) { showError('Filen kunne ikke åbnes', err); } } });
+$('search').addEventListener('input', render);
+$('fStatus').addEventListener('change', render);
+$('fMyn').addEventListener('change', render);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if (!$('modal').hidden) closeModal(); else if (drawerId) closeDrawer(); else $('fileMenu').open = false; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveFile(); }
+});
+window.addEventListener('beforeunload', e => { if (dirty && !leavingForAuth) { e.preventDefault(); e.returnValue = ''; } });
+start();
+</script>
+</body>
+</html>
