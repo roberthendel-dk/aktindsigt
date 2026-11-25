@@ -319,7 +319,7 @@ function normKlage(k) {
 const KL_RES = ['Afventer', 'Medhold (Omgjort)', 'Delvis medhold', 'Hjemvist', 'Ikke medhold (Stadfæstet)', 'Afvist', 'Henvist til anden klageinstans'];
 const KL_WIN = ['Medhold (Omgjort)', 'Delvis medhold', 'Hjemvist'];
 const EV_TYPES = ['Modtaget kvittering', 'Modtaget anmodning om præcisering', 'Modtaget anmodning om afgrænsning', 'Sendt rykker', 'Modtaget fristudsættelse', 'Sendt indsigelse', 'Klage sendt', 'Hjemvist', 'Genbehandling', 'Modtaget svar', 'Notat'];
-const KL_EV_TYPES = ['Modtaget kvittering', 'Klageinstansen har udskudt afgørelsen', 'Sendt rykker', 'Modtaget myndighedens udtalelse', 'Sendt bemærkninger', 'Hjemvist', 'Genbehandling', 'Modtaget afgørelse', 'Notat'];
+const KL_EV_TYPES = ['Anmodet om genovervejelse hos myndigheden', 'Myndigheden fastholdt afgørelsen', 'Sendt videre til klageinstansen', 'Modtaget kvittering', 'Klageinstansen har udskudt afgørelsen', 'Sendt rykker', 'Modtaget myndighedens udtalelse', 'Sendt bemærkninger', 'Hjemvist', 'Genbehandling', 'Modtaget afgørelse', 'Notat'];
 const FRIST_TYPES = ['Modtaget fristudsættelse', 'Klageinstansen har udskudt afgørelsen'];
 
 /* =====================================================================
@@ -770,7 +770,7 @@ function eventForm(sagId, evId = null) {
   const s = sagInfo(sagId); if (!s) return;
   openModal((evId ? 'Rediger hændelse · ' : 'Ny hændelse · ') + s.titel, `<form id="f" class="grid2" novalidate>
     <div><label for="etype">Hændelse</label><select id="etype" name="type">${opts(s.type === 'Klage' ? KL_EV_TYPES : EV_TYPES, e.type || 'Sendt rykker')}</select></div>
-    <div><label for="edato">Dato *</label><input id="edato" type="date" name="dato" required value="${e.dato || today()}"></div>
+    <div><label for="edato">Dato *</label><input id="edato" type="date" name="dato" required value="${e.dato || today()}">${s.type === 'Klage' ? '<div class="hint">Datoen må gerne ligge før klagedatoen, fx når du først bad myndigheden om at genoverveje sagen.</div>' : ''}</div>
     <div id="nyWrap"><label for="eny">Ny frist</label><input id="eny" type="date" name="nyFrist" value="${e.nyFrist || ''}"><div class="hint">${s.type === 'Aktindsigt' ? 'Bliver sagens gældende svarfrist.' : 'Bliver klagens forventede afgørelsesdato.'}</div></div>
     <div class="full"><label for="enote">Notat</label><textarea id="enote" name="note">${esc(e.note)}</textarea></div>
     <div class="full err" id="ferr" role="alert"></div>
