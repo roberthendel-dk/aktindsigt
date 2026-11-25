@@ -308,7 +308,7 @@ const LS_KEY = 'aktindsigt_klager_v4_test';
 const DROPBOX_APP_KEY = 'zjg5dswmxtqrnrx';
 const AKT_STATUS = ['Under behandling', 'Afgjort'];
 const AKT_AFG = ['Afventer', 'Fuld aktindsigt', 'Delvis aktindsigt', 'Afslag', 'Henlagt'];
-const KL_INSTANS = ['Ankestyrelsen', 'Folketingets Ombudsmand', 'Datatilsynet', 'Nævnenes Hus', 'Anden'];
+const KL_INSTANS = ['Myndigheden selv (genovervejelse)', 'Ankestyrelsen', 'Folketingets Ombudsmand', 'Datatilsynet', 'Nævnenes Hus', 'Anden'];
 const KL_STATUS = ['Under behandling', 'Afgjort'];
 /* En klage er afgjort, så snart klageinstansen har truffet en afgørelse, også ved hjemvisning. */
 function normKlage(k) {
@@ -806,7 +806,7 @@ function flowFor(a) {
   eventsFor(a.id).forEach(e => add(e.dato, e.type, [e.note, e.nyFrist ? 'Ny frist ' + fmt(e.nyFrist) : ''].filter(Boolean).join('\n'), 'k-event', e.id));
   add(a.svardato, 'Svar modtaget', a.medhold && a.medhold !== 'Afventer' ? a.medhold : '', 'k-answer');
   klagerFor(a.id).forEach(k => {
-    add(k.dato, 'Klage sendt til ' + (k.instans || 'klageinstans'), k.sagsnr ? 'Klagesag ' + k.sagsnr : '', 'k-klage');
+    add(k.dato, (/^Myndigheden selv/.test(k.instans || '') ? 'Anmodet om genovervejelse hos myndigheden' : 'Klage sendt til ' + (k.instans || 'klageinstans')), k.sagsnr ? 'Klagesag ' + k.sagsnr : '', 'k-klage');
     eventsFor(k.id).forEach(e => add(e.dato, 'Klage: ' + e.type.toLowerCase(), [e.note, e.nyFrist ? 'Ny frist ' + fmt(e.nyFrist) : ''].filter(Boolean).join('\n'), 'k-klage', e.id));
     if (k.status !== 'Afgjort') add(k.frist, 'Forventet klageafgørelse', '', 'k-deadline');
     add(k.genbehandlingFrist, 'Frist for genbehandling', '', 'k-deadline');
